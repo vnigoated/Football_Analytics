@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pitchlens"
+version = "0.1.0"
+description = "Broadcast football video to tracking data, with pressing intensity, xT and honest uncertainty."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "polars>=1.0",
+    "opencv-python-headless>=4.9",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+    "kloppy>=3.15",
+    "unravelsports>=1.0",
+    "huggingface_hub>=0.24",
+]
+
+[project.optional-dependencies]
+# Computer-vision stack (install on Colab / GPU machines).
+vision = [
+    "torch>=2.3",
+    "supervision>=0.25",
+    "rfdetr>=1.0",
+]
+# Ultralytics YOLO is AGPL-3.0: kept as a separate, opt-in extra.
+yolo = ["ultralytics>=8.3"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+pitchlens = "pitchlens.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pitchlens"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
