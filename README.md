@@ -1,7 +1,7 @@
 # PitchLens: Football Analytics from Broadcast Video
 
 [![CI](https://github.com/vnigoated/Football_Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/vnigoated/Football_Analytics/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10%E2%80%933.12-blue)
+![Python](https://img.shields.io/badge/python-3.11%E2%80%933.12-blue)
 ![License](https://img.shields.io/badge/license-Apache--2.0-green)
 
 **PitchLens** turns ordinary TV footage of a football match into **tracking data** (where every player and the ball is, in metres). It then computes **pressing intensity** and **Expected Threat (xT)**, each reported **with honest error bars**.
@@ -64,7 +64,7 @@ Outputs go to `outputs/pressing_baseline/`: a Parquet file of per-frame pressing
 pitchlens download-gsr --splits train valid --dest data/SN-GSR-2025
 ```
 
-> Use Python **3.10–3.12**. Some dependencies don't support 3.13+ yet.
+> Use Python **3.11 or 3.12**. `unravelsports` needs 3.11+, and some dependencies don't support 3.13+ yet. On Windows: `py -3.11 -m venv .venv`.
 
 ## Training on Colab (A100)
 

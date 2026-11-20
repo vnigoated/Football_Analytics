@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Broadcast football video to tracking data, with pressing intensity, xT and honest uncertainty."
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"  # unravelsports requires 3.11+
 dependencies = [
     "numpy>=1.26",
     "polars>=1.0",
@@ -42,4 +42,4 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
