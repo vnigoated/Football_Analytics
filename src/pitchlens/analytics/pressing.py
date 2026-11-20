@@ -30,6 +30,9 @@ def compute_pressing_intensity(
     from unravel.soccer import KloppyPolarsDataset, PressingIntensity
 
     kp = KloppyPolarsDataset(kloppy_dataset=tracking_dataset)
+    kp.data, n_dropped = drop_frames_without_carrier(kp.data)
+    if n_dropped:
+        print(f"Dropped {n_dropped} frames with no ball carrier in the possessing team")
     model = PressingIntensity(dataset=kp)
     model.fit(
         method="teams",
@@ -39,6 +42,53 @@ def compute_pressing_intensity(
         **fit_kwargs,
     )
     return model.output, kp.data
+
+
+def drop_frames_without_carrier(tracking: pl.DataFrame) -> tuple[pl.DataFrame, int]:
+    """Remove frames where no player of the ball-owning team is flagged as ball carrier.
+
+    unravelsports (``ball_method="max"``) assumes exactly such a carrier exists and
+    crashes otherwise. On IDSSE match J03WPY this affects 48 of 81,460 frames (0.06%),
+    e.g. loose balls.
+    """
+    keys = ["period_id", "frame_id"]
+    valid = (
+        tracking.group_by(keys)
+        .agg(
+            (pl.col("is_ball_carrier") & (pl.col("team_id") == pl.col("ball_owning_team_id")))
+            .any()
+            .alias("_ok")
+        )
+        .filter(pl.col("_ok"))
+        .select(keys)
+    )
+    n_before = tracking.select(keys).unique().height
+    out = tracking.join(valid, on=keys, how="semi")
+    return out, n_before - valid.height
+
+
+def summarise_matches(
+    frames: pl.DataFrame,
+    fps: float = 25.0,
+    high_pressure: float = 0.5,
+) -> pl.DataFrame:
+    """One row per match and pressing team from concatenated ``summarise_frames`` outputs.
+
+    Expects ``match_id`` and ``pressing_team_name`` columns (added by the CLI).
+    """
+    p = pl.col("pressure_on_carrier").fill_nan(None)
+    return (
+        frames.drop_nulls("pressing_team_id")
+        .group_by("match_id", "pressing_team_name")
+        .agg(
+            (pl.len() / fps / 60).round(1).alias("minutes_out_of_possession"),
+            p.mean().round(3).alias("mean_pressure"),
+            p.median().round(3).alias("median_pressure"),
+            ((p > high_pressure).mean() * 100).round(1).alias("pct_high_pressure"),
+            pl.col("n_active_pressers").mean().round(2).alias("mean_active_pressers"),
+        )
+        .sort("match_id", "mean_pressure", descending=[False, True])
+    )
 
 
 def summarise_frames(

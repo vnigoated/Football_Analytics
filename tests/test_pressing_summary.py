@@ -4,7 +4,47 @@ import numpy as np
 import polars as pl
 import pytest
 
-from pitchlens.analytics.pressing import summarise_frames
+from pitchlens.analytics.pressing import (
+    drop_frames_without_carrier,
+    summarise_frames,
+    summarise_matches,
+)
+
+
+def test_summarise_matches():
+    frames = pl.DataFrame(
+        {
+            "match_id": ["m"] * 4,
+            "pressing_team_id": ["A", "A", "B", "B"],
+            "pressing_team_name": ["Team A", "Team A", "Team B", "Team B"],
+            "pressure_on_carrier": [0.2, 0.8, float("nan"), 0.4],
+            "n_active_pressers": [1, 3, 0, 2],
+        }
+    )
+    t = summarise_matches(frames, fps=1.0)
+    a = t.filter(pl.col("pressing_team_name") == "Team A").row(0, named=True)
+    b = t.filter(pl.col("pressing_team_name") == "Team B").row(0, named=True)
+    assert a["mean_pressure"] == pytest.approx(0.5)
+    assert a["pct_high_pressure"] == pytest.approx(50.0)
+    assert b["mean_pressure"] == pytest.approx(0.4)  # NaN ignored
+    assert t["pressing_team_name"].to_list()[0] == "Team A"  # sorted by pressure
+
+
+def test_drop_frames_without_carrier():
+    tracking = pl.DataFrame(
+        {
+            "period_id": [1, 1, 1, 1],
+            "frame_id": [1, 1, 2, 2],
+            "id": ["a1", "d1", "a1", "d1"],
+            "team_id": ["A", "D", "A", "D"],
+            "ball_owning_team_id": ["A", "A", "A", "A"],
+            # frame 2: carrier flag sits on the defending team -> invalid
+            "is_ball_carrier": [True, False, False, True],
+        }
+    )
+    out, n_dropped = drop_frames_without_carrier(tracking)
+    assert n_dropped == 1
+    assert out["frame_id"].unique().to_list() == [1]
 
 
 def test_summarise_frames_synthetic():
