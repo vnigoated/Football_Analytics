@@ -100,7 +100,7 @@ checkpoints/
 
 # ---------- Experiment outputs & logs ----------
 outputs/
-results/
+/results/
 runs/
 wandb/
 mlruns/

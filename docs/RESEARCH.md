@@ -112,14 +112,14 @@ We then **check the results on real broadcast video** (SoccerNet-GSR) using our 
 | Dataset | Contents | Licence / terms | Used for |
 |---|---|---|---|
 | **IDSSE / Sportec open data**: Bassek, Rein, Weber & Memmert, *Scientific Data* (2025), DOI 10.1038/s41597-025-04505-y | 7 matches (2 Bundesliga, 5 2. Bundesliga, 2022/23); TRACAB optical tracking at 25 fps + official events. Mirror: Hugging Face `pysport/idsse-data`; loads with kloppy | **CC-BY 4.0**: free use including commercial, **attribution required** | **Primary ground truth** for RQ1–RQ3 |
-| **Metrica Sports sample data** (`metrica-sports/sample-data`) | 3 anonymised games (2 CSV, 1 EPTS/JSON) with synchronised events. Full-pitch coordinates (105×68 m); not yet confirmed that every frame has all 22 players + ball | **No licence file.** README only says *"Please be responsible with the use of this data"* and *"If you use it for anything public, please aknowledge the source."* | Secondary test set and **comparison with 2607.11548** (same data). Research use with acknowledgement; **don't redistribute; don't assume commercial rights** |
+| **Metrica Sports sample data** (`metrica-sports/sample-data`) | 3 anonymised games (2 CSV, 1 EPTS/JSON) with synchronised events. Full-pitch coordinates (105×68 m), 25 fps. **Checked (Nov 2026, kloppy):** all 22 players present in every frame of the first 20,000 frames of all 3 games (game 3 lists 35 players incl. substitutes) | **No licence file.** README only says *"Please be responsible with the use of this data"* and *"If you use it for anything public, please aknowledge the source."* | Secondary test set and **comparison with 2607.11548** (same data). Research use with acknowledgement; **don't redistribute; don't assume commercial rights** |
 | **SkillCorner open data** (A-League 2024/25) | 10 matches of real broadcast tracking at 10 fps + dynamic events | MIT (per repo); credit SkillCorner. Re-check the LICENSE file before release | Fit the **virtual camera** visibility model |
 | **SoccerNet-GSR** (`SoccerNet/SN-GSR-2025` on Hugging Face) | Broadcast clips + ground-truth minimap positions; train 9.8 GB, valid 11.2 GB, test 8.9 GB, challenge 5.3 GB (≈35 GB total) | **Not gated** (checked 2026-11-20); dataset card says **GPL-3.0**. Raw full-match videos (`SoccerNet_raw_HQ`) and ball-action sets **are** NDA-gated, but we don't need them | End-to-end validation on real video; GS-HOTA |
 | **SoccerNet-Calibration / Tracking / ReID / Jersey** (HF, not gated) | Pitch line annotations, tracking clips, re-ID crops, jersey numbers | Check each dataset card's licence | Training the keypoint, detection, re-ID and jersey models |
 | **StatsBomb open data** | Large event dataset | StatsBomb open-data user agreement (attribution; check before use) | Training the xT grid |
 
 **Data to-do:**
-- [ ] Load Metrica games in kloppy and confirm all 22 players + ball are present in every frame before using them as ground truth.
+- [x] Load Metrica games in kloppy and confirm all 22 players + ball are present in every frame before using them as ground truth. (Done: 22/22 players in 100% of checked frames, games 1–3.)
 - [ ] Read the SkillCorner and StatsBomb licence files once more before the public release.
 
 ---

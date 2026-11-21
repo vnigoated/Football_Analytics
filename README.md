@@ -33,7 +33,7 @@ TV video → detect players & ball → track → split teams → pitch keypoints
 | `pitchlens.analytics.pressing` | ✅ Pressing intensity (Bekkers 2025, via `unravelsports`) + per-frame summaries |
 | `pitchlens.analytics.xt` | ✅ Expected Threat grid (Singh 2019), fit + rate actions |
 | `pitchlens.geometry` | ✅ Pitch landmark model, RANSAC homography with reprojection error |
-| `pitchlens.simulation.camera` | 🟡 Virtual broadcast camera (first, simple version) |
+| `pitchlens.simulation` | 🟡 Virtual broadcast camera + player hiding (`visibility-bias` experiment, simple rectangular view) |
 | `pitchlens.vision` | ⏳ Detection, tracking, teams, keypoints (planned) |
 
 ## Quickstart

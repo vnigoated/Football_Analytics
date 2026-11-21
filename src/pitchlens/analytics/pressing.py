@@ -15,6 +15,7 @@ import polars as pl
 def compute_pressing_intensity(
     tracking_dataset,
     speed_threshold: float = 2.0,
+    transform=None,
     **fit_kwargs,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Run unravelsports PressingIntensity on a kloppy TrackingDataset.
@@ -33,6 +34,8 @@ def compute_pressing_intensity(
     kp.data, n_dropped = drop_frames_without_carrier(kp.data)
     if n_dropped:
         print(f"Dropped {n_dropped} frames with no ball carrier in the possessing team")
+    if transform is not None:
+        kp.data = transform(kp.data)
     model = PressingIntensity(dataset=kp)
     model.fit(
         method="teams",
