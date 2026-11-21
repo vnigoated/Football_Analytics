@@ -14,14 +14,16 @@ from pitchlens.simulation.camera import BroadcastCamera
 KEYS = ["period_id", "frame_id"]
 
 
-def camera_centres(
+def camera_path(
     tracking: pl.DataFrame,
     camera: BroadcastCamera,
     centred: bool = True,
 ) -> pl.DataFrame:
-    """Per-frame camera window ``(x0, x1, y0, y1)`` in the tracking's coordinate system.
+    """Per-frame camera centre ``cx`` and half-length ``hl`` (pitch coordinates, 0..L),
+    plus the y bounds ``y0``/``y1`` in the tracking's coordinate system.
 
-    The camera follows the ball (with ``camera.smoothing`` lag, reset every period).
+    The camera follows the ball (lag reset every period). Missing ball positions are
+    filled forward, so the camera holds still while the ball is lost.
     """
     ox, oy = (camera.pitch_length / 2, camera.pitch_width / 2) if centred else (0.0, 0.0)
     ball = (
@@ -29,27 +31,26 @@ def camera_centres(
         .select(*KEYS, "x", "y")
         .unique(subset=KEYS, keep="first")
         .sort(KEYS)
+        .with_columns(
+            pl.col("x", "y").fill_nan(None).forward_fill().backward_fill().over("period_id")
+        )
     )
+    eps = 1e-6
     parts = []
-    for period, part in ball.group_by("period_id", maintain_order=True):
-        xy = part.select("x", "y").to_numpy().astype(np.float64) + [ox, oy]
-        xy = np.nan_to_num(xy, nan=0.0)
-        centre = camera.track_ball(xy)
-        win = np.array([camera.window(cx, cy) for cx, cy in centre])
-        # A window edge lying on a pitch line also shows what is beyond it (throw-ins,
-        # keepers behind the goal line), so open that edge.
-        eps = 1e-6
-        win[win[:, 0] <= eps, 0] = -np.inf
-        win[win[:, 1] >= camera.pitch_length - eps, 1] = np.inf
-        win[win[:, 2] <= eps, 2] = -np.inf
-        win[win[:, 3] >= camera.pitch_width - eps, 3] = np.inf
-        win -= [ox, ox, oy, oy]
+    for _, part in ball.group_by("period_id", maintain_order=True):
+        xy = np.nan_to_num(part.select("x", "y").to_numpy().astype(np.float64)) + [ox, oy]
+        st = camera.path(xy)
+        y0 = st["cy"] - st["half_width"]
+        y1 = st["cy"] + st["half_width"]
+        # A window edge on a touchline also shows what is beyond it, so open it.
+        y0 = np.where(y0 <= eps, -np.inf, y0 - oy)
+        y1 = np.where(y1 >= camera.pitch_width - eps, np.inf, y1 - oy)
         parts.append(
             part.select(KEYS).with_columns(
-                pl.Series("x0", win[:, 0]),
-                pl.Series("x1", win[:, 1]),
-                pl.Series("y0", win[:, 2]),
-                pl.Series("y1", win[:, 3]),
+                pl.Series("cx", st["cx"]),
+                pl.Series("hl", st["half_length"]),
+                pl.Series("y0", y0),
+                pl.Series("y1", y1),
             )
         )
     return pl.concat(parts)
@@ -61,22 +62,25 @@ def apply_broadcast_view(
     centred: bool = True,
     keep_carrier: bool = True,
 ) -> pl.DataFrame:
-    """Drop player rows outside the camera window. Ball rows are always kept.
+    """Drop player rows outside the camera footprint. Ball rows are always kept.
 
-    ``keep_carrier`` keeps the ball carrier even if the clipped window misses them
+    ``keep_carrier`` keeps the ball carrier even if the (lagging) camera misses them
     (a broadcast camera essentially always shows the player on the ball).
     """
-    win = camera_centres(tracking, camera, centred=centred)
-    inside = (
-        (pl.col("x") >= pl.col("x0"))
-        & (pl.col("x") <= pl.col("x1"))
-        & (pl.col("y") >= pl.col("y0"))
-        & (pl.col("y") <= pl.col("y1"))
-    )
-    keep = inside | (pl.col("id") == "ball")
+    ox, oy = (camera.pitch_length / 2, camera.pitch_width / 2) if centred else (0.0, 0.0)
+    L, W, eps = camera.pitch_length, camera.pitch_width, 1e-6
+    path = camera_path(tracking, camera, centred=centred)
+    px, py = pl.col("x") + ox, pl.col("y") + oy  # pitch coordinates
+    # perspective: shorter footprint on the near touchline (y=0), longer on the far one
+    hl = pl.col("hl") * (1 + camera.perspective * (2 * py.clip(0, W) / W - 1))
+    x0, x1 = pl.col("cx") - hl, pl.col("cx") + hl
+    # an edge that reaches a goal line also shows what is behind it
+    in_x = ((x0 <= eps) | (px >= x0)) & ((x1 >= L - eps) | (px <= x1))
+    in_y = (pl.col("y") >= pl.col("y0")) & (pl.col("y") <= pl.col("y1"))
+    keep = (in_x & in_y) | (pl.col("id") == "ball")
     if keep_carrier:
         keep = keep | pl.col("is_ball_carrier")
-    return tracking.join(win, on=KEYS, how="left").filter(keep).drop("x0", "x1", "y0", "y1")
+    return tracking.join(path, on=KEYS, how="left").filter(keep).drop("cx", "hl", "y0", "y1")
 
 
 def visibility_stats(full: pl.DataFrame, masked: pl.DataFrame) -> dict[str, float]:

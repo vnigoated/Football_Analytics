@@ -82,3 +82,23 @@ def test_players_beyond_the_line_stay_visible_at_the_edge():
     )
     out = apply_broadcast_view(t, BroadcastCamera(view_length=40), keep_carrier=False)
     assert out.height == 3
+
+
+def test_perspective_far_side_sees_more():
+    # ball at the centre; two players 23 m along the pitch, one near, one far touchline
+    t = pl.DataFrame(
+        {
+            "period_id": [1] * 3,
+            "frame_id": [1] * 3,
+            "id": ["ball", "near", "far"],
+            "x": [0.0, 23.0, 23.0],
+            "y": [0.0, -30.0, 30.0],
+            "is_ball_carrier": [False, False, False],
+        }
+    )
+    flat = apply_broadcast_view(t, BroadcastCamera(view_length=40), keep_carrier=False)
+    assert sorted(flat["id"].to_list()) == ["ball"]
+    persp = apply_broadcast_view(
+        t, BroadcastCamera(view_length=40, perspective=0.3), keep_carrier=False
+    )
+    assert sorted(persp["id"].to_list()) == ["ball", "far"]

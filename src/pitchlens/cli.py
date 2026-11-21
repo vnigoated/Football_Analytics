@@ -84,7 +84,10 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
             view_length=min(view, dims.pitch_length),
             pitch_length=dims.pitch_length,
             pitch_width=dims.pitch_width,
-            smoothing=args.smoothing,
+            lag_s=args.lag_s,
+            perspective=args.perspective,
+            zoom_gain=args.zoom_gain,
+            fps=ds.metadata.frame_rate or 25.0,
         )
         stats: dict[str, float] = {}
 
@@ -99,7 +102,10 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
         )
         joined = join_frames(gt, summarise_frames(pti, tracking)).with_columns(
             pl.lit(float(view)).alias("view_length"),
-            pl.lit(args.smoothing).alias("smoothing"),
+            pl.lit(args.lag_s).alias("lag_s"),
+            pl.lit(args.perspective).alias("perspective"),
+            pl.lit(args.zoom_gain).alias("zoom_gain"),
+            pl.lit(args.tag).alias("camera"),
             pl.lit(stats["players_per_frame_visible"]).alias("players_visible"),
         )
         if "pressing_team_name" not in joined.columns:
@@ -107,7 +113,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
                 pl.col("pressing_team_id").replace_strict(team_names, default=None)
                 .alias("pressing_team_name")
             )
-        path = out / f"vis_{args.match}_v{view:g}_s{args.smoothing:g}.parquet"
+        path = out / f"vis_{args.match}_v{view:g}_{args.tag}.parquet"
         joined.write_parquet(path)
         print(f"  visible players/frame = {stats['players_per_frame_visible']:.2f} -> {path}")
 
@@ -119,11 +125,15 @@ def _cmd_visibility_summary(args: argparse.Namespace) -> None:
     if not files:
         raise SystemExit(f"No vis_*.parquet in {args.dir}; run visibility-bias first")
     joined = pl.concat([pl.read_parquet(f) for f in files], how="diagonal")
+    # Experiment 1 files predate the camera column: they used the simple camera
+    if "camera" not in joined.columns:
+        joined = joined.with_columns(pl.lit("simple").alias("camera"))
+    joined = joined.with_columns(pl.col("camera").fill_null("simple"))
     per_team = bias_table(joined)
     per_team.write_csv(Path(args.dir) / "bias_per_team.csv")
 
     overall = (
-        per_team.group_by("view_length")
+        per_team.group_by("camera", "view_length")
         .agg(
             pl.len().alias("team_matches"),
             pl.col("rel_bias_pressure_pct").mean().alias("bias_pressure_pct"),
@@ -134,10 +144,10 @@ def _cmd_visibility_summary(args: argparse.Namespace) -> None:
             pl.col("rel_bias_total_pct").mean().alias("bias_total_pct"),
         )
         .join(
-            joined.group_by("view_length").agg(pl.col("players_visible").mean()),
-            on="view_length",
+            joined.group_by("camera", "view_length").agg(pl.col("players_visible").mean()),
+            on=["camera", "view_length"],
         )
-        .sort("view_length")
+        .sort("camera", "view_length")
     )
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=250, float_precision=3):
         print(overall)
@@ -170,7 +180,10 @@ def main(argv: list[str] | None = None) -> None:
     v = sub.add_parser("visibility-bias", help="Experiment 1: pressing under a virtual camera")
     v.add_argument("--match", default="J03WPY")
     v.add_argument("--view-lengths", type=float, nargs="+", default=[30, 40, 50, 70, 105])
-    v.add_argument("--smoothing", type=float, default=0.0)
+    v.add_argument("--lag-s", type=float, default=0.0, help="Camera lag (seconds)")
+    v.add_argument("--perspective", type=float, default=0.0, help="Trapezoid strength, e.g. 0.3")
+    v.add_argument("--zoom-gain", type=float, default=0.0, help="Zoom-out for fast balls, e.g. 0.5")
+    v.add_argument("--tag", default="simple", help="Camera name used in file names and tables")
     v.add_argument("--speed-threshold", type=float, default=2.0)
     v.add_argument("--gt-dir", default="outputs/pressing_baseline")
     v.add_argument("--out", default="outputs/visibility_bias")

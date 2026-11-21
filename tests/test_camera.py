@@ -21,3 +21,13 @@ def test_smoothing_lags_ball():
     assert np.allclose(BroadcastCamera(smoothing=0.0).track_ball(ball), ball)
     lagged = BroadcastCamera(smoothing=0.5).track_ball(ball)
     assert 10.0 < lagged[1, 0] < 90.0
+
+
+def test_lag_seconds_and_zoom():
+    cam = BroadcastCamera(lag_s=1.0, fps=25)
+    assert 0.95 < cam.alpha < 0.97  # exp(-1/25)
+    ball = np.c_[np.linspace(20, 80, 26), np.full(26, 34.0)]  # 60 m in 1 s
+    zoomed = BroadcastCamera(zoom_gain=0.5, zoom_speed_ref=15).path(ball)
+    fixed = BroadcastCamera().path(ball)
+    assert np.allclose(fixed["half_length"], 20.0)
+    assert zoomed["half_length"][-1] == np.float64(30.0)  # 60 m/s >> ref -> full zoom-out
