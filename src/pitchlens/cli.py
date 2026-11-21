@@ -58,6 +58,93 @@ def _cmd_pressing_summary(args: argparse.Namespace) -> None:
     print(f"Saved -> {out}")
 
 
+def _cmd_visibility_bias(args: argparse.Namespace) -> None:
+    """Experiment 1: pressing on full vs. virtual-broadcast tracking."""
+    from pitchlens.analytics.compare import join_frames
+    from pitchlens.analytics.pressing import compute_pressing_intensity, summarise_frames
+    from pitchlens.data.datasets import load_idsse_tracking
+    from pitchlens.simulation.camera import BroadcastCamera
+    from pitchlens.simulation.occlusion import apply_broadcast_view, visibility_stats
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    gt_path = Path(args.gt_dir) / f"pressing_{args.match}.parquet"
+    if not gt_path.exists():
+        raise SystemExit(
+            f"Need full-match ground truth at {gt_path}: "
+            f"run `pitchlens pressing-baseline --match {args.match}` first"
+        )
+    gt = pl.read_parquet(gt_path)
+    ds = load_idsse_tracking(args.match)
+    dims = ds.metadata.pitch_dimensions
+    team_names = {t.team_id: t.name for t in ds.metadata.teams}
+
+    for view in args.view_lengths:
+        cam = BroadcastCamera(
+            view_length=min(view, dims.pitch_length),
+            pitch_length=dims.pitch_length,
+            pitch_width=dims.pitch_width,
+            smoothing=args.smoothing,
+        )
+        stats: dict[str, float] = {}
+
+        def mask(df: pl.DataFrame, cam=cam, stats=stats) -> pl.DataFrame:
+            masked = apply_broadcast_view(df, cam)
+            stats.update(visibility_stats(df, masked))
+            return masked
+
+        print(f"[{args.match}] view_length={view} m ...")
+        pti, tracking = compute_pressing_intensity(
+            ds, speed_threshold=args.speed_threshold, transform=mask
+        )
+        joined = join_frames(gt, summarise_frames(pti, tracking)).with_columns(
+            pl.lit(float(view)).alias("view_length"),
+            pl.lit(args.smoothing).alias("smoothing"),
+            pl.lit(stats["players_per_frame_visible"]).alias("players_visible"),
+        )
+        if "pressing_team_name" not in joined.columns:
+            joined = joined.with_columns(
+                pl.col("pressing_team_id").replace_strict(team_names, default=None)
+                .alias("pressing_team_name")
+            )
+        path = out / f"vis_{args.match}_v{view:g}_s{args.smoothing:g}.parquet"
+        joined.write_parquet(path)
+        print(f"  visible players/frame = {stats['players_per_frame_visible']:.2f} -> {path}")
+
+
+def _cmd_visibility_summary(args: argparse.Namespace) -> None:
+    from pitchlens.analytics.compare import bias_table
+
+    files = sorted(Path(args.dir).glob("vis_*.parquet"))
+    if not files:
+        raise SystemExit(f"No vis_*.parquet in {args.dir}; run visibility-bias first")
+    joined = pl.concat([pl.read_parquet(f) for f in files], how="diagonal")
+    per_team = bias_table(joined)
+    per_team.write_csv(Path(args.dir) / "bias_per_team.csv")
+
+    overall = (
+        per_team.group_by("view_length")
+        .agg(
+            pl.len().alias("team_matches"),
+            pl.col("rel_bias_pressure_pct").mean().alias("bias_pressure_pct"),
+            pl.col("rel_bias_pressure_pct").std().alias("bias_pressure_sd"),
+            pl.col("frame_mae").mean(),
+            pl.col("frame_corr").mean(),
+            pl.col("rel_bias_active_pct").mean().alias("bias_active_pct"),
+            pl.col("rel_bias_total_pct").mean().alias("bias_total_pct"),
+        )
+        .join(
+            joined.group_by("view_length").agg(pl.col("players_visible").mean()),
+            on="view_length",
+        )
+        .sort("view_length")
+    )
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=250, float_precision=3):
+        print(overall)
+    overall.write_csv(Path(args.dir) / "bias_overall.csv")
+    print(f"Saved -> {Path(args.dir) / 'bias_overall.csv'} and bias_per_team.csv")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="pitchlens", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -79,6 +166,19 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("pressing-summary", help="Per-match/team table from baseline outputs")
     s.add_argument("--dir", default="outputs/pressing_baseline")
     s.set_defaults(func=_cmd_pressing_summary)
+
+    v = sub.add_parser("visibility-bias", help="Experiment 1: pressing under a virtual camera")
+    v.add_argument("--match", default="J03WPY")
+    v.add_argument("--view-lengths", type=float, nargs="+", default=[30, 40, 50, 70, 105])
+    v.add_argument("--smoothing", type=float, default=0.0)
+    v.add_argument("--speed-threshold", type=float, default=2.0)
+    v.add_argument("--gt-dir", default="outputs/pressing_baseline")
+    v.add_argument("--out", default="outputs/visibility_bias")
+    v.set_defaults(func=_cmd_visibility_bias)
+
+    vs = sub.add_parser("visibility-summary", help="Bias tables from visibility-bias outputs")
+    vs.add_argument("--dir", default="outputs/visibility_bias")
+    vs.set_defaults(func=_cmd_visibility_summary)
 
     args = p.parse_args(argv)
     args.func(args)
