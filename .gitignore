@@ -56,8 +56,8 @@ ipython_config.py
 sample_data/
 
 # ---------- Datasets (download with scripts, never commit) ----------
-data/
-datasets/
+/data/
+/datasets/
 SoccerNet/
 SN-GSR-*/
 *.zip
