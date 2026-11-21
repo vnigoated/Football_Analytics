@@ -32,7 +32,8 @@ def join_frames(gt: pl.DataFrame, sim: pl.DataFrame) -> pl.DataFrame:
 
 def bias_table(joined: pl.DataFrame, high_pressure: float = 0.5) -> pl.DataFrame:
     """One row per match, pressing team (and ``view_length`` if present)."""
-    groups = [c for c in ("view_length", "match_id", "pressing_team_name") if c in joined.columns]
+    cols = ("camera", "view_length", "match_id", "pressing_team_name")
+    groups = [c for c in cols if c in joined.columns]
     p, ps = pl.col("pressure_on_carrier"), pl.col("pressure_on_carrier_sim")
     valid = joined.drop_nulls("pressure_on_carrier")
     return (

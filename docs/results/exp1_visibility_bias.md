@@ -26,6 +26,6 @@ Reproduce: `pitchlens pressing-baseline --match <id>` → `pitchlens visibility-
 
 ## Limitations (next steps)
 
-- Best-case camera: no lag, no zoom changes, rectangular footprint. Next: fit lag/zoom/trapezoid to SkillCorner visibility; add `--smoothing`.
+- Best-case camera: no lag, no zoom changes, rectangular footprint. **Follow-up:** [Experiment 1b](exp1b_realistic_camera.md) adds lag, perspective and zoom.
 - Only one dataset/league and Düsseldorf appears in 5 of 7 matches. Next: repeat on Metrica (complete, 22/22 players verified).
 - No uncertainty intervals yet (bootstrap over possessions → RQ2).
