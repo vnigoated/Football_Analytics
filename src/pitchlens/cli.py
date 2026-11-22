@@ -17,12 +17,12 @@ def _cmd_download_gsr(args: argparse.Namespace) -> None:
 
 def _cmd_pressing_baseline(args: argparse.Namespace) -> None:
     from pitchlens.analytics.pressing import compute_pressing_intensity, summarise_frames
-    from pitchlens.data.datasets import load_idsse_tracking
+    from pitchlens.data.datasets import load_tracking
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    print(f"Loading IDSSE match {args.match} (limit={args.limit}) ...")
-    ds = load_idsse_tracking(args.match, limit=args.limit)
+    print(f"Loading match {args.match} (limit={args.limit}) ...")
+    ds = load_tracking(args.match, limit=args.limit)
     print("Computing pressing intensity ...")
     pti, tracking = compute_pressing_intensity(ds, speed_threshold=args.speed_threshold)
     team_names = {t.team_id: t.name for t in ds.metadata.teams}
@@ -62,7 +62,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
     """Experiment 1: pressing on full vs. virtual-broadcast tracking."""
     from pitchlens.analytics.compare import join_frames
     from pitchlens.analytics.pressing import compute_pressing_intensity, summarise_frames
-    from pitchlens.data.datasets import load_idsse_tracking
+    from pitchlens.data.datasets import load_tracking
     from pitchlens.simulation.camera import BroadcastCamera
     from pitchlens.simulation.occlusion import apply_broadcast_view, visibility_stats
 
@@ -75,7 +75,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
             f"run `pitchlens pressing-baseline --match {args.match}` first"
         )
     gt = pl.read_parquet(gt_path)
-    ds = load_idsse_tracking(args.match)
+    ds = load_tracking(args.match)
     dims = ds.metadata.pitch_dimensions
     team_names = {t.team_id: t.name for t in ds.metadata.teams}
 
