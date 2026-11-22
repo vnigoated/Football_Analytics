@@ -5,7 +5,8 @@
 
 ## Compile
 
-- **Overleaf (easiest):** New Project → Upload Project → upload `main.tex`, `refs.bib` and the `figures/` folder.
+- **Overleaf (easiest):** New Project → Upload Project → upload `paper_overleaf.zip`
+  (build it with `python paper/make_overleaf_zip.py`), or upload `main.tex`, `refs.bib` and `figures/`.
   Overleaf already has `llncs.cls` and `splncs04.bst`. Compile with pdfLaTeX.
 - **Locally:** install TeX Live or MiKTeX, then `latexmk -pdf main.tex`.
 
@@ -20,9 +21,8 @@ python paper/make_figures.py
 ## Before submission
 
 - [x] Author and affiliation.
-- [ ] `refs.bib`: complete the Graph Imputer author list, the authors of the *Science and Medicine in Football* paper,
-      and the first names for Penn, Donnelly and Bhatt (publisher pages need a browser login).
-- [ ] Make the repo public and archive a release (Zenodo DOI).
+- [x] `refs.bib`: all metadata verified against arXiv and Crossref (2026-11-22).
+- [ ] Make the repo public (the paper links to it); optionally archive a release with a Zenodo DOI.
 - [ ] Check the workshop's page limit, anonymity rules and template version.
 - [x] Read arXiv 2607.11548 in full and describe it accurately (2026-11-22).
 - [x] Novelty search: no published work measures pressing on broadcast data (2026-11-22).
