@@ -20,6 +20,14 @@ import polars as pl
 
 LABEL_FILE = "Labels-GameState.json"
 PLAYER_ROLES = ("player", "goalkeeper")
+# Pitch positions outside this box (metres from the centre) are treated as homography failures.
+PITCH_BOUNDS = (60.0, 40.0)
+
+
+def plausible_position() -> pl.Expr:
+    """True where the labelled pitch position lies within ``PITCH_BOUNDS``."""
+    bx, by = PITCH_BOUNDS
+    return (pl.col("pitch_x").abs() <= bx) & (pl.col("pitch_y").abs() <= by)
 
 
 def find_sequences(root: str | Path) -> list[Path]:
@@ -125,7 +133,7 @@ def visible_per_frame(images: pl.DataFrame, objects: pl.DataFrame) -> pl.DataFra
         right=(pl.col("role").is_in(PLAYER_ROLES) & (pl.col("team") == "right")).sum(),
         referees=(pl.col("role") == "referee").sum(),
         ball=(pl.col("role") == "ball").any(),
-        players_on_pitch=(pl.col("role").is_in(PLAYER_ROLES) & pl.col("pitch_x").is_not_null()).sum(),
+        players_on_pitch=(pl.col("role").is_in(PLAYER_ROLES) & plausible_position()).sum(),
     )
     out = labelled.select("sequence", "image_id", "frame").join(
         counts, on=["sequence", "image_id"], how="left"
@@ -140,6 +148,8 @@ def split_summary(images: pl.DataFrame, objects: pl.DataFrame) -> dict[str, floa
     """Headline numbers for one split."""
     v = visible_per_frame(images, objects)
     p = v["players"]
+    pos = objects.filter(pl.col("pitch_x").is_not_null())
+    bad = pos.filter(~plausible_position())
     return {
         "sequences": images["sequence"].n_unique(),
         "frames": images.height,
@@ -154,4 +164,6 @@ def split_summary(images: pl.DataFrame, objects: pl.DataFrame) -> dict[str, floa
         "players_with_pitch_pos_share": round(
             float(v["players_on_pitch"].sum() / max(int(p.sum()), 1)), 3
         ),
+        "implausible_pos_share": round(bad.height / max(pos.height, 1), 4),
+        "frames_with_implausible_pos": bad.select("sequence", "image_id").unique().height,
     }

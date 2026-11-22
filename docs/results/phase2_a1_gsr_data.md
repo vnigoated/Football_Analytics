@@ -1,0 +1,55 @@
+# Phase 2 · A1: SoccerNet-GSR data check
+
+**Date:** 2026-11-22 · **Notebook:** `colab/01_gsr_data.ipynb` · **Code:** `pitchlens.data.gsr`
+
+## Data
+
+SoccerNet Game State Reconstruction (SN-GSR-2025, Hugging Face, GPL-3.0; not redistributed).
+Each sequence is a 30-s broadcast clip (750 frames, 25 fps, 1920×1080) of Swiss Super League matches, with
+per-frame boxes, track IDs, role (player / goalkeeper / referee / ball / other), team (left / right), jersey
+number and the pitch position (metres, origin at the centre) of each box's bottom middle. Pitch-line annotations
+(26 line classes) are also present and will be used for A5 (keypoints → homography).
+
+Note: the zips have no `train/` / `valid/` folder inside; the notebook extracts each into its own folder.
+
+## Statistics
+
+| | train | valid |
+|---|---|---|
+| Sequences | 57 | 58 |
+| Frames (all labelled) | 42,750 | 43,500 |
+| Objects | 733,001 | 748,666 |
+| Tracks | 1,427 | 1,426 |
+| **Visible players per frame, mean** | **14.72** | **14.84** |
+| median / p10 / p90 | 15 / 9 / 20 | 16 / 9 / 20 |
+| Frames with the ball labelled | 94.1% | 93.0% |
+| Players with a pitch position | 99.3% | 98.4% |
+| Positions off the pitch (> 60 m / 40 m from centre) | 0.59% | 0.47% |
+
+Visible players include goalkeepers and partly visible players. Every player and goalkeeper has a team label;
+objects without a team are exactly the referees, the ball and "other".
+
+## Findings
+
+1. **Real broadcasts show 14.7–14.8 players on average**, against 14.65 predicted by the Phase 1 camera
+   fitted to SkillCorner (A-League). A different league, a different label source and the same number: the
+   simulated cameras used for the bias estimates are realistic in the quantity that drives the bias.
+2. **Large variation between clips** (clip means from about 9 to 20 players). In Phase 1 terms this spans
+   roughly the −10% to −29% range of active-presser bias, so the correction must be applied per clip or per
+   broadcast, not as one global factor.
+3. **All off-pitch positions are ball labels** (valid: 3,500 objects in 3,500 frames, about 8.6% of ball
+   labels; worst clips SNGS-024, -037, -051). The ball's position is projected from its box bottom onto the
+   ground plane, which is wrong when the ball is in the air. Player positions are clean. Consequences: ignore
+   ball pitch positions outside the pitch, and treat ball position as reliable only near the ground (matters
+   for possession in C1).
+
+## Caveat
+
+SN-GSR clips are chosen around annotated actions (e.g. kick-offs) and are not a random sample of match time,
+so the visible-player distribution may differ slightly from full broadcasts. B1 compares the pipeline's count
+with these labels, not with full matches.
+
+## Next
+
+A2: fine-tune RF-DETR on train (player, goalkeeper, referee, ball), evaluate mAP@50 on valid, with ball recall
+reported separately.
