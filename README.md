@@ -10,6 +10,7 @@
 
 - 📖 **Project in plain words:** [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
 - 🔬 **Research plan:** [docs/RESEARCH.md](docs/RESEARCH.md)
+- 🗺️ **Phase 2 plan (video pipeline):** [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md)
 
 ---
 
