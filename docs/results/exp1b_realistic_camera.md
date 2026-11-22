@@ -1,5 +1,9 @@
 # Experiment 1b: a more realistic virtual camera
 
+> **Update (Experiment 3):** a camera fitted to real broadcasts shows **no measurable lag**. The lag values here were
+> assumptions; with the fitted camera the bias in pressure on the ball carrier is about −0.5 %, not −3.8 %.
+> The undercount of active pressers (about −21 %) is confirmed. See [Experiment 3](exp3_fitted_camera.md).
+
 Follow-up to [Experiment 1](exp1_visibility_bias.md). Same data (7 IDSSE matches, full tracking as ground truth), same pressing model,
 but the camera now has three optional effects (`pitchlens.simulation.camera.BroadcastCamera`):
 

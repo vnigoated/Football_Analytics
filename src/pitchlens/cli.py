@@ -63,7 +63,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
     from pitchlens.analytics.compare import join_frames
     from pitchlens.analytics.pressing import compute_pressing_intensity, summarise_frames
     from pitchlens.data.datasets import load_tracking
-    from pitchlens.simulation.camera import BroadcastCamera
+    from pitchlens.simulation.camera import BroadcastCamera, WedgeCamera
     from pitchlens.simulation.occlusion import apply_broadcast_view, visibility_stats
 
     out = Path(args.out)
@@ -79,16 +79,30 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
     dims = ds.metadata.pitch_dimensions
     team_names = {t.team_id: t.name for t in ds.metadata.teams}
 
-    for view in args.view_lengths:
-        cam = BroadcastCamera(
-            view_length=min(view, dims.pitch_length),
-            pitch_length=dims.pitch_length,
-            pitch_width=dims.pitch_width,
-            lag_s=args.lag_s,
-            perspective=args.perspective,
-            zoom_gain=args.zoom_gain,
-            fps=ds.metadata.frame_rate or 25.0,
-        )
+    fps = ds.metadata.frame_rate or 25.0
+    runs = []  # (view_length, camera, tag)
+    if args.camera_json:
+        import json
+
+        params = json.loads(Path(args.camera_json).read_text())
+        params |= {"fps": fps, "pitch_length": dims.pitch_length, "pitch_width": dims.pitch_width}
+        for seed in args.seeds or [None]:
+            tag = args.tag if seed is None else f"{args.tag}_s{seed}"
+            runs.append((0.0, WedgeCamera(**(params | {"seed": seed})), tag))
+    else:
+        for view in args.view_lengths:
+            cam = BroadcastCamera(
+                view_length=min(view, dims.pitch_length),
+                pitch_length=dims.pitch_length,
+                pitch_width=dims.pitch_width,
+                lag_s=args.lag_s,
+                perspective=args.perspective,
+                zoom_gain=args.zoom_gain,
+                fps=fps,
+            )
+            runs.append((view, cam, args.tag))
+
+    for view, cam, tag in runs:
         stats: dict[str, float] = {}
 
         def mask(df: pl.DataFrame, cam=cam, stats=stats) -> pl.DataFrame:
@@ -96,7 +110,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
             stats.update(visibility_stats(df, masked))
             return masked
 
-        print(f"[{args.match}] view_length={view} m ...")
+        print(f"[{args.match}] camera={tag} view_length={view} m ...")
         pti, tracking = compute_pressing_intensity(
             ds, speed_threshold=args.speed_threshold, transform=mask
         )
@@ -105,7 +119,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
             pl.lit(args.lag_s).alias("lag_s"),
             pl.lit(args.perspective).alias("perspective"),
             pl.lit(args.zoom_gain).alias("zoom_gain"),
-            pl.lit(args.tag).alias("camera"),
+            pl.lit(tag).alias("camera"),
             pl.lit(stats["players_per_frame_visible"]).alias("players_visible"),
         )
         if "pressing_team_name" not in joined.columns:
@@ -113,7 +127,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
                 pl.col("pressing_team_id").replace_strict(team_names, default=None)
                 .alias("pressing_team_name")
             )
-        path = out / f"vis_{args.match}_v{view:g}_{args.tag}.parquet"
+        path = out / f"vis_{args.match}_v{view:g}_{tag}.parquet"
         joined.write_parquet(path)
         print(f"  visible players/frame = {stats['players_per_frame_visible']:.2f} -> {path}")
 
@@ -176,6 +190,65 @@ def _cmd_visibility_ci(args: argparse.Namespace) -> None:
     print(f"Saved -> {out / 'ci_overall.csv'} and ci_per_team.csv")
 
 
+def _cmd_fit_camera(args: argparse.Namespace) -> None:
+    """Fit the WedgeCamera on SkillCorner broadcast footprints; validate on held-out matches."""
+    import dataclasses
+    import json
+
+    from pitchlens.data.skillcorner import load_skillcorner, skillcorner_match_ids
+    from pitchlens.simulation.camera import BroadcastCamera
+    from pitchlens.simulation.camera_fit import (
+        evaluate_camera,
+        fit_wedge_camera,
+        footprint_visibility,
+        skillcorner_long,
+    )
+
+    ids = sorted(skillcorner_match_ids(args.data))[: args.max_matches]
+    fit_ids, test_ids = ids[0::2], ids[1::2]
+    print(f"Fitting on {len(fit_ids)} matches, testing on {len(test_ids)}")
+    fit_data = [load_skillcorner(m, args.data) for m in fit_ids]
+    ball_cam, _ = fit_wedge_camera([f for f, _ in fit_data])
+    camera, report = fit_wedge_camera([f for f, _ in fit_data], [p for _, p in fit_data])
+    del fit_data
+    ball_cam.fps = camera.fps = 10.0
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    params = dataclasses.asdict(camera) | {"fps": 25.0, "seed": None}
+    (out / "wedge_camera.json").write_text(json.dumps(params, indent=2))
+    (out / "fit_report.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps(params, indent=2))
+    print(json.dumps(report, indent=2))
+
+    cameras = {
+        "wedge_ball_only": ball_cam,
+        "wedge_fit": camera,
+        "wedge_fit_noise": dataclasses.replace(camera, seed=0),
+        "rect_simple_40m": BroadcastCamera(view_length=40, fps=10),
+        "rect_realistic_32m": BroadcastCamera(
+            view_length=32, lag_s=0.5, perspective=0.3, zoom_gain=0.5, fps=10
+        ),
+    }
+    rows = []
+    for m in test_ids:
+        frames, players = load_skillcorner(m, args.data)
+        long = skillcorner_long(frames, players)
+        inside = footprint_visibility(frames, long)
+        det = long.filter(pl.col("id") != "ball")["is_detected"].to_numpy()
+        rows.append({"match_id": m, "camera": "real_footprint (upper bound)",
+                     "accuracy": float((inside == det).mean())})  # fmt: skip
+        for name, cam in cameras.items():
+            rows.append({"match_id": m, "camera": name, **evaluate_camera(cam, frames, players)})
+        print(f"  evaluated {m}")
+    table = pl.DataFrame(rows, infer_schema_length=None)
+    table.write_csv(out / "validation_per_match.csv")
+    summary = table.group_by("camera").agg(pl.exclude("match_id").mean()).sort("camera")
+    summary.write_csv(out / "validation.csv")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200, float_precision=3):
+        print(summary)
+    print(f"Saved -> {out}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="pitchlens", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -205,6 +278,10 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--perspective", type=float, default=0.0, help="Trapezoid strength, e.g. 0.3")
     v.add_argument("--zoom-gain", type=float, default=0.0, help="Zoom-out for fast balls, e.g. 0.5")
     v.add_argument("--tag", default="simple", help="Camera name used in file names and tables")
+    v.add_argument("--camera-json", default=None,
+                   help="Use a fitted WedgeCamera (from fit-camera) instead of the rectangle")
+    v.add_argument("--seeds", type=int, nargs="*", default=None,
+                   help="With --camera-json: one run per seed, with the fitted framing noise")
     v.add_argument("--speed-threshold", type=float, default=2.0)
     v.add_argument("--gt-dir", default="outputs/pressing_baseline")
     v.add_argument("--out", default="outputs/visibility_bias")
@@ -221,6 +298,12 @@ def main(argv: list[str] | None = None) -> None:
     ci.add_argument("--level", type=float, default=0.95)
     ci.add_argument("--seed", type=int, default=0)
     ci.set_defaults(func=_cmd_visibility_ci)
+
+    fc = sub.add_parser("fit-camera", help="Fit the broadcast camera to SkillCorner footprints")
+    fc.add_argument("--data", default="data/skillcorner")
+    fc.add_argument("--out", default="outputs/camera_fit")
+    fc.add_argument("--max-matches", type=int, default=None)
+    fc.set_defaults(func=_cmd_fit_camera)
 
     args = p.parse_args(argv)
     args.func(args)
