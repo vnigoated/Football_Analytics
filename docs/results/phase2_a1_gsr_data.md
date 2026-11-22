@@ -29,6 +29,37 @@ Note: the zips have no `train/` / `valid/` folder inside; the notebook extracts 
 Visible players include goalkeepers and partly visible players. Every player and goalkeeper has a team label;
 objects without a team are exactly the referees, the ball and "other".
 
+**Valid split in detail**
+
+| Role | Objects | | Team | Objects |
+|---|---|---|---|---|
+| player | 619,500 | | right | 326,679 |
+| referee | 61,847 | | left | 318,841 |
+| ball | 40,900 | | none | 103,146 (= referees + ball + other) |
+| goalkeeper | 26,020 | | | |
+| other | 399 | | | |
+
+- Missing pitch position: 1.52% of objects (all other columns complete).
+- Off-pitch positions: train 4,274 frames, valid 3,500 frames (one object each in valid, always the ball).
+  Most affected valid clips: SNGS-024 (238), SNGS-037 (195), SNGS-051 (173), SNGS-055 (171), SNGS-028 (147).
+- Plausible positions span the pitch (±52.5 m × ±34 m) plus a few metres outside the lines.
+
+**Label format (version 1.3)**
+
+- `info`: game id, clip id, action class around which the clip is cut (e.g. "Kick-off"), game time, frame rate,
+  sequence length.
+- `images`: `image_id`, `file_name`, `height`, `width`, `is_labeled`, `has_labeled_person`, `has_labeled_pitch`,
+  `has_labeled_camera`, ignore regions.
+- `annotations`, `supercategory` `object`: `track_id`, `category_id`, `attributes` (role, jersey, team), `bbox_image`
+  (x, y, w, h, centre), `bbox_pitch` and `bbox_pitch_raw` (bottom left / middle / right, metres). We use
+  `bbox_pitch` bottom middle.
+- `annotations`, `supercategory` `pitch`: line annotations (26 classes such as "Middle line", "Circle central").
+- `categories`: player 1, goalkeeper 2, referee 3, ball 4, pitch 5, camera 6, other 7.
+
+**Saved outputs** (Google Drive `MyDrive/pitchlens/outputs/gsr/`, private): `summary.csv`,
+`{train,valid}_{images,objects,visible_per_frame}.parquet`, `visible_players.png` (histogram and clip means
+against the 14.65 line), `sample_frames.png` (labelled frames; contains SN-GSR images, do not publish).
+
 ## Findings
 
 1. **Real broadcasts show 14.7–14.8 players on average**, against 14.65 predicted by the Phase 1 camera
