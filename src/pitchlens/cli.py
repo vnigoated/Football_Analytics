@@ -121,14 +121,7 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
 def _cmd_visibility_summary(args: argparse.Namespace) -> None:
     from pitchlens.analytics.compare import bias_table
 
-    files = sorted(Path(args.dir).glob("vis_*.parquet"))
-    if not files:
-        raise SystemExit(f"No vis_*.parquet in {args.dir}; run visibility-bias first")
-    joined = pl.concat([pl.read_parquet(f) for f in files], how="diagonal")
-    # Experiment 1 files predate the camera column: they used the simple camera
-    if "camera" not in joined.columns:
-        joined = joined.with_columns(pl.lit("simple").alias("camera"))
-    joined = joined.with_columns(pl.col("camera").fill_null("simple"))
+    joined = _load_visibility(args.dir)
     per_team = bias_table(joined)
     per_team.write_csv(Path(args.dir) / "bias_per_team.csv")
 
@@ -153,6 +146,34 @@ def _cmd_visibility_summary(args: argparse.Namespace) -> None:
         print(overall)
     overall.write_csv(Path(args.dir) / "bias_overall.csv")
     print(f"Saved -> {Path(args.dir) / 'bias_overall.csv'} and bias_per_team.csv")
+
+
+def _load_visibility(dir_: str) -> pl.DataFrame:
+    files = sorted(Path(dir_).glob("vis_*.parquet"))
+    if not files:
+        raise SystemExit(f"No vis_*.parquet in {dir_}; run visibility-bias first")
+    joined = pl.concat([pl.read_parquet(f) for f in files], how="diagonal")
+    # Experiment 1 files predate the camera column: they used the simple camera
+    if "camera" not in joined.columns:
+        joined = joined.with_columns(pl.lit("simple").alias("camera"))
+    return joined.with_columns(pl.col("camera").fill_null("simple"))
+
+
+def _cmd_visibility_ci(args: argparse.Namespace) -> None:
+    """RQ2: block-bootstrap confidence intervals for the visibility bias."""
+    from pitchlens.analytics.uncertainty import bootstrap_bias
+
+    joined = _load_visibility(args.dir)
+    per_team, overall = bootstrap_bias(
+        joined, block_s=args.block_s, n_boot=args.n_boot, level=args.level, seed=args.seed
+    )
+    out = Path(args.dir)
+    per_team.write_csv(out / "ci_per_team.csv")
+    overall = overall.sort("camera", "view_length")
+    overall.write_csv(out / "ci_overall.csv")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=250, float_precision=2):
+        print(overall)
+    print(f"Saved -> {out / 'ci_overall.csv'} and ci_per_team.csv")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -192,6 +213,14 @@ def main(argv: list[str] | None = None) -> None:
     vs = sub.add_parser("visibility-summary", help="Bias tables from visibility-bias outputs")
     vs.add_argument("--dir", default="outputs/visibility_bias")
     vs.set_defaults(func=_cmd_visibility_summary)
+
+    ci = sub.add_parser("visibility-ci", help="RQ2: bootstrap confidence intervals for the bias")
+    ci.add_argument("--dir", default="outputs/visibility_bias")
+    ci.add_argument("--block-s", type=float, default=60.0, help="Block length in seconds")
+    ci.add_argument("--n-boot", type=int, default=2000)
+    ci.add_argument("--level", type=float, default=0.95)
+    ci.add_argument("--seed", type=int, default=0)
+    ci.set_defaults(func=_cmd_visibility_ci)
 
     args = p.parse_args(argv)
     args.func(args)
