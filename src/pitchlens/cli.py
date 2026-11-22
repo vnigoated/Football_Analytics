@@ -61,7 +61,7 @@ def _cmd_pressing_summary(args: argparse.Namespace) -> None:
 def _cmd_visibility_bias(args: argparse.Namespace) -> None:
     """Experiment 1: pressing on full vs. virtual-broadcast tracking."""
     from pitchlens.analytics.compare import join_frames
-    from pitchlens.analytics.pressing import compute_pressing_intensity, summarise_frames
+    from pitchlens.analytics.pressing import prepare_tracking, run_pressing, summarise_frames
     from pitchlens.data.datasets import load_tracking
     from pitchlens.simulation.camera import BroadcastCamera, WedgeCamera
     from pitchlens.simulation.occlusion import apply_broadcast_view, visibility_stats
@@ -84,11 +84,17 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
     if args.camera_json:
         import json
 
-        params = json.loads(Path(args.camera_json).read_text())
-        params |= {"fps": fps, "pitch_length": dims.pitch_length, "pitch_width": dims.pitch_width}
-        for seed in args.seeds or [None]:
-            tag = args.tag if seed is None else f"{args.tag}_s{seed}"
-            runs.append((0.0, WedgeCamera(**(params | {"seed": seed})), tag))
+        paths = []
+        for c in args.camera_json:
+            c = Path(c)
+            paths += sorted(c.glob("*.json")) if c.is_dir() else [c]
+        for path in paths:
+            params = json.loads(path.read_text())
+            params |= {"fps": fps, "pitch_length": dims.pitch_length, "pitch_width": dims.pitch_width}
+            base = args.tag if len(paths) == 1 else f"{args.tag}_{path.stem}"
+            for seed in args.seeds or [None]:
+                tag = base if seed is None else f"{base}_s{seed}"
+                runs.append((0.0, WedgeCamera(**(params | {"seed": seed})), tag))
     else:
         for view in args.view_lengths:
             cam = BroadcastCamera(
@@ -102,19 +108,25 @@ def _cmd_visibility_bias(args: argparse.Namespace) -> None:
             )
             runs.append((view, cam, args.tag))
 
+    prepared = prepare_tracking(ds)  # once per match, reused for every camera
     for view, cam, tag in runs:
         stats: dict[str, float] = {}
 
         def mask(df: pl.DataFrame, cam=cam, stats=stats) -> pl.DataFrame:
-            masked = apply_broadcast_view(df, cam)
+            masked = apply_broadcast_view(df, cam)  # camera path needs every frame
+            if args.sample_every > 1:
+                keep = pl.col("frame_id") % args.sample_every == 0
+                df, masked = df.filter(keep), masked.filter(keep)
             stats.update(visibility_stats(df, masked))
             return masked
 
         print(f"[{args.match}] camera={tag} view_length={view} m ...")
-        pti, tracking = compute_pressing_intensity(
-            ds, speed_threshold=args.speed_threshold, transform=mask
+        pti, tracking = run_pressing(
+            prepared, speed_threshold=args.speed_threshold, transform=mask
         )
-        joined = join_frames(gt, summarise_frames(pti, tracking)).with_columns(
+        sim = summarise_frames(pti, tracking)
+        gt_part = gt.join(sim.select("period_id", "frame_id"), on=["period_id", "frame_id"], how="semi")
+        joined = join_frames(gt_part, sim).with_columns(
             pl.lit(float(view)).alias("view_length"),
             pl.lit(args.lag_s).alias("lag_s"),
             pl.lit(args.perspective).alias("perspective"),
@@ -190,6 +202,44 @@ def _cmd_visibility_ci(args: argparse.Namespace) -> None:
     print(f"Saved -> {out / 'ci_overall.csv'} and ci_per_team.csv")
 
 
+def _fit_per_match(ids: list[int], args: argparse.Namespace) -> None:
+    """One WedgeCamera per SkillCorner match: the spread across stadiums (RQ2 part 2)."""
+    import dataclasses
+    import json
+
+    from pitchlens.data.skillcorner import load_skillcorner
+    from pitchlens.simulation.camera_fit import evaluate_camera, fit_wedge_camera
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for m in ids:
+        frames, players = load_skillcorner(m, args.data)
+        cam, report = fit_wedge_camera([frames], [players])
+        cam.fps = 10.0
+        ev = evaluate_camera(cam, frames, players)
+        params = dataclasses.asdict(cam) | {"fps": 25.0, "seed": None}
+        (out / f"{m}.json").write_text(json.dumps(params, indent=2))
+        rows.append(
+            {
+                "match_id": m,
+                "cam_x": cam.cam_x,
+                "cam_y": cam.cam_y,
+                "fov_median_deg": report["fov_deg_p10_p50_p90"][1],
+                "lag_s": cam.lag_s,
+                "r2_pan": report["r2_pan"],
+                **ev,
+            }
+        )
+        print(f"  {m}: camera y={cam.cam_y:.1f} m, visible {ev['visible_per_frame_pred']:.2f} "
+              f"(real {ev['visible_per_frame_true']:.2f}), agreement {ev['accuracy']:.3f}")
+    table = pl.DataFrame(rows)
+    table.write_csv(out / "stadium_cameras.csv")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200, float_precision=2):
+        print(table)
+    print(f"Saved {len(rows)} cameras -> {out}")
+
+
 def _cmd_fit_camera(args: argparse.Namespace) -> None:
     """Fit the WedgeCamera on SkillCorner broadcast footprints; validate on held-out matches."""
     import dataclasses
@@ -205,6 +255,9 @@ def _cmd_fit_camera(args: argparse.Namespace) -> None:
     )
 
     ids = sorted(skillcorner_match_ids(args.data))[: args.max_matches]
+    if args.per_match:
+        _fit_per_match(ids, args)
+        return
     fit_ids, test_ids = ids[0::2], ids[1::2]
     print(f"Fitting on {len(fit_ids)} matches, testing on {len(test_ids)}")
     fit_data = [load_skillcorner(m, args.data) for m in fit_ids]
@@ -249,6 +302,26 @@ def _cmd_fit_camera(args: argparse.Namespace) -> None:
     print(f"Saved -> {out}")
 
 
+def _cmd_stadium_summary(args: argparse.Namespace) -> None:
+    """RQ2 part 2: bias across stadium cameras, with intervals per source of uncertainty."""
+    import numpy as np
+
+    from pitchlens.analytics.uncertainty import stadium_bootstrap
+
+    joined = _load_visibility(args.dir)
+    per_cam, intervals = stadium_bootstrap(joined, n_boot=args.n_boot, seed=args.seed)
+    slope, _ = np.polyfit(per_cam["players_visible"], per_cam["active_bias"], 1)
+    out = Path(args.dir)
+    per_cam.write_csv(out / "stadium_per_camera.csv")
+    intervals.write_csv(out / "stadium_intervals.csv")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200, float_precision=2):
+        print(per_cam)
+        print(intervals)
+    print(f"Active-presser bias changes by {slope:+.2f} percentage points per extra visible player "
+          f"(across {per_cam.height} stadium cameras)")
+    print(f"Saved -> {out / 'stadium_intervals.csv'} and stadium_per_camera.csv")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="pitchlens", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -278,8 +351,10 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--perspective", type=float, default=0.0, help="Trapezoid strength, e.g. 0.3")
     v.add_argument("--zoom-gain", type=float, default=0.0, help="Zoom-out for fast balls, e.g. 0.5")
     v.add_argument("--tag", default="simple", help="Camera name used in file names and tables")
-    v.add_argument("--camera-json", default=None,
-                   help="Use a fitted WedgeCamera (from fit-camera) instead of the rectangle")
+    v.add_argument("--camera-json", nargs="+", default=None,
+                   help="Fitted WedgeCamera JSON file(s) or folder(s) (from fit-camera)")
+    v.add_argument("--sample-every", type=int, default=1,
+                   help="Evaluate every N-th frame only (camera still follows every frame)")
     v.add_argument("--seeds", type=int, nargs="*", default=None,
                    help="With --camera-json: one run per seed, with the fitted framing noise")
     v.add_argument("--speed-threshold", type=float, default=2.0)
@@ -299,10 +374,18 @@ def main(argv: list[str] | None = None) -> None:
     ci.add_argument("--seed", type=int, default=0)
     ci.set_defaults(func=_cmd_visibility_ci)
 
+    ss = sub.add_parser("stadium-summary", help="RQ2 part 2: bias across stadium cameras")
+    ss.add_argument("--dir", default="outputs/stadiums/idsse")
+    ss.add_argument("--n-boot", type=int, default=2000)
+    ss.add_argument("--seed", type=int, default=0)
+    ss.set_defaults(func=_cmd_stadium_summary)
+
     fc = sub.add_parser("fit-camera", help="Fit the broadcast camera to SkillCorner footprints")
     fc.add_argument("--data", default="data/skillcorner")
     fc.add_argument("--out", default="outputs/camera_fit")
     fc.add_argument("--max-matches", type=int, default=None)
+    fc.add_argument("--per-match", action="store_true",
+                    help="Fit one camera per match (stadium) instead of one shared camera")
     fc.set_defaults(func=_cmd_fit_camera)
 
     args = p.parse_args(argv)

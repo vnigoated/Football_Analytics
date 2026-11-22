@@ -28,14 +28,35 @@ def compute_pressing_intensity(
     ``"ball_owning"`` gives rows = defenders, columns = attackers. ``summarise_frames``
     detects the orientation from the ball carrier, so it works either way.
     """
-    from unravel.soccer import KloppyPolarsDataset, PressingIntensity
+    prepared = prepare_tracking(tracking_dataset)
+    return run_pressing(prepared, speed_threshold, transform, **fit_kwargs)
+
+
+def prepare_tracking(tracking_dataset):
+    """Convert once to unravelsports format (positions, velocities) and drop bad frames.
+
+    Reuse the result with ``run_pressing`` to evaluate many cameras on one match.
+    """
+    from unravel.soccer import KloppyPolarsDataset
 
     kp = KloppyPolarsDataset(kloppy_dataset=tracking_dataset)
     kp.data, n_dropped = drop_frames_without_carrier(kp.data)
     if n_dropped:
         print(f"Dropped {n_dropped} frames with no ball carrier in the possessing team")
-    if transform is not None:
-        kp.data = transform(kp.data)
+    return kp, kp.data
+
+
+def run_pressing(
+    prepared,
+    speed_threshold: float = 2.0,
+    transform=None,
+    **fit_kwargs,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Pressing intensity on a ``prepare_tracking`` result, optionally after ``transform``."""
+    from unravel.soccer import PressingIntensity
+
+    kp, base = prepared
+    kp.data = transform(base) if transform is not None else base
     model = PressingIntensity(dataset=kp)
     model.fit(
         method="teams",
