@@ -34,10 +34,28 @@ Similar to IDSSE (mean pressure 0.22–0.36), with slightly fewer active presser
 - **New insight:** the size of the bias depends on team compactness (how many players fit in the camera view),
   so a single correction factor across leagues or styles would be wrong.
 
+## Equal-visibility comparison (Colab cell 4e)
+
+The camera was narrowed on Metrica until it showed the same number of players as on IDSSE (about 14.5):
+
+| Camera | Dataset | View | Players visible | Pressure on ball carrier | Active pressers |
+|---|---|---|---|---|---|
+| Realistic | IDSSE (7 games) | 32 m | 14.45 | −3.8 % [−4.3, −3.4] | −22.8 % [−25.1, −20.5] |
+| Realistic | **Metrica (2 games)** | **29 m** | **14.48** | **−4.0 % [−4.7, −3.4]** | **−22.3 % [−25.3, −19.6]** |
+| Simple | IDSSE | 40 m | 14.55 | −0.12 % [−0.15, −0.09] | −20.3 % [−22.7, −18.0] |
+| Simple | **Metrica** | **36 m** | **14.60** | **−0.35 % [−0.47, −0.26]** | **−19.4 % [−22.7, −16.2]** |
+
+**At equal visibility the two data sources agree within half a percentage point** for the realistic camera,
+and the confidence intervals overlap almost completely. Across the Metrica sweep (13.8–15.7 visible players),
+each extra visible player reduces the undercount of active pressers by about 3.5 percentage points
+(about 3 on IDSSE).
+
+**Conclusion:** the bias is driven by **how many players the camera shows**, not by the league or the data
+provider. The number of visible players, which can be measured on real broadcast video, is therefore the key
+quantity for correcting broadcast pressing metrics.
+
 ## Caveats
 
 - Only 2 games: the match-level bootstrap has 2 clusters, so the intervals are likely too narrow. Treat Metrica as a
   qualitative replication.
-- The equal-visibility adjustment above is a linear approximation. A camera re-calibrated to 14.5 visible players on
-  Metrica (Colab cell 4e) gives the direct comparison.
 - Possession is rebuilt from hand-annotated events; IDSSE possession comes from the provider.
