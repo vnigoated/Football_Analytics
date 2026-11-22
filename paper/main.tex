@@ -19,9 +19,10 @@
 Visibility Bias in Football Tracking Metrics}
 \titlerunning{Visibility Bias in Broadcast Pressing Data}
 
-\author{\todo{Author names}}
-\authorrunning{\todo{Authors}}
-\institute{\todo{Affiliation, email}}
+\author{Varun Inamdar}
+\authorrunning{V. Inamdar}
+\institute{Vishwakarma University, Pune, India\\
+\email{vninamdar03@gmail.com}}
 
 \maketitle
 
@@ -37,7 +38,9 @@ pressers by 22.6\% [95\% CI 19.8, 25.2] (replication: 19.0\% [16.1, 22.0]); for 
 undercount ranges from 10\% to 29\% and is almost perfectly explained by the number of visible players
 ($r = 0.98$, about 4 percentage points per player). Pressure on the ball carrier is nearly unbiased
 ($-1.7\%$), but grows with camera lag ($r = -0.98$): even 0.2\,s of lag increases it about fourfold. Both drivers
-can be measured on the broadcast itself, which makes the bias correctable. Code and fitted cameras are open source.
+can be measured on the broadcast itself. A simple correction based on the number of visible players reduces the mean
+absolute error in active pressers from 21.8\% to 3.1\% on broadcasts whose stadium camera and match were both held
+out. Code and fitted cameras are open source.
 \keywords{football \and soccer \and broadcast tracking \and pressing \and measurement bias \and uncertainty}
 \end{abstract}
 
@@ -72,24 +75,27 @@ outperforms the common rectangular approximation and shows that camera operators
 (ii) the first measurement, to our knowledge, of visibility bias in pressing metrics, with confidence intervals that include
 stadium-to-stadium camera variation and a replication on a second data provider;
 (iii) the finding that the bias is almost fully explained by two quantities measurable on the broadcast, the number of
-visible players and camera lag; and
-(iv) an open-source implementation of the full pipeline. \todo{Novelty claim to be re-checked against recent literature
-before submission.}
+visible players and camera lag, and a correction that removes most of it on held-out stadiums and matches; and
+(iv) an open-source implementation of the full pipeline.
 
 % ---------------------------------------------------------------------------------------------
 \section{Related Work}
 
 \textbf{Broadcast tracking.} SoccerNet Game State Reconstruction~\cite{somers2024gsr} benchmarks the extraction of
 player positions on a minimap from broadcast video; commercial providers deliver broadcast tracking at scale
-(e.g.\ SkillCorner~\cite{skillcorner_opendata}). The reliability of broadcast-derived data for analytics was studied
-in~\cite{smf2025broadcast}. \todo{Summarise its findings after reading it in full.}
+(e.g.\ SkillCorner~\cite{skillcorner_opendata}). Comparing broadcast-derived with official tracking,
+\cite{smf2025broadcast} found that less than half of the players' activity is visible on TV broadcasts and concluded
+that some tactical analyses remain reliable, while physical metrics are more affected by the missing data. We show that
+one central tactical metric, team-wide pressing, is in fact strongly biased.
 
 \textbf{Off-screen players.} Graph Imputer~\cite{omidshafiei2022graphimputer} predicts the trajectories of off-screen
 players; \cite{rsos2025continuous} builds continuous tracks from discrete broadcast data. Closest to our work,
-\cite{offscreen2026} simulates a broadcast camera on Metrica data and reports large pitch-control errors in hidden
-zones, together with a training-free imputation method. \todo{Verify this description against the full paper; contrast
-their camera simulation with our fitted camera.} We study pressing rather than pitch control, fit the camera to real
-footprints instead of assuming it, and quantify uncertainty including camera variation.
+Choi~\cite{offscreen2026} simulates a broadcast camera on the three Metrica matches: a full-height window 36--60\,m wide
+that follows an exponentially smoothed ball position, without zoom or tilt. Ignoring off-screen players leaves a
+hidden-zone pitch-control error of 25.1--26.9 percentage points, which a training-free imputation (centroid voting)
+roughly halves. That camera is assumed and checked only against the typical number of visible players, and pressing is
+not studied. We study pressing, fit the camera to real broadcast footprints and validate it per player, quantify
+uncertainty including camera variation, and correct the bias without imputing positions.
 
 \textbf{Pressing.} We use the pressing intensity of Bekkers~\cite{bekkers2025pressing}, which gives, for every
 defender--attacker pair, the probability that the defender can intercept the attacker within a time threshold, based
@@ -102,7 +108,8 @@ on positions and velocities. Related spatial models include pitch control~\cite{
 22 players and the ball at 25\,Hz for 7 matches of the 2022/23 Bundesliga and 2.~Bundesliga, with possession
 information. After keeping ball-in-play frames, 552{,}294 frames remain. As a replication we use the 2 Metrica Sports
 sample games~\cite{metrica_sample} (25\,Hz, all players), for which we reconstruct possession and ball-in-play status
-from the accompanying event file (166{,}913 frames). \todo{Note: one team appears in 5 of the 7 IDSSE matches.}
+from the accompanying event file (166{,}913 frames). One team, Fortuna Düsseldorf, appears in 5 of the 7 IDSSE
+matches; Metrica's anonymised teams provide an independent check.
 
 \textbf{Real broadcasts.} The SkillCorner open data~\cite{skillcorner_opendata} (MIT licence) contains broadcast
 tracking of 20 A-League 2024/25 matches at 10\,Hz. For every frame it gives the four corners of the camera image
@@ -231,10 +238,9 @@ less affected ($-0.5\%$ to $-1.8\%$). The stadium camera alone contributes as mu
 (IDSSE, active pressers: camera only [$-24.3$, $-20.6$], matches and blocks only [$-24.4$, $-20.6$]).
 
 \textbf{Replication.} The same camera shows about one more player on Metrica than on IDSSE (more compact teams).
-At equal visibility the two data sources agree closely: with the assumed-lag rectangle camera tuned to 14.5 visible
-players,
-active pressers are undercounted by 22.3\% [19.6, 25.3] on Metrica and 22.8\% [20.5, 25.1] on IDSSE.
-\todo{This comparison uses the assumed-lag rectangle of Exp.~1b; repeat with the fitted camera.}
+At equal visibility the two data sources agree closely: regressing the bias of each broadcast (stadium camera
+$\times$ match) on its number of visible players, the undercount of active pressers at 14.5 visible players is
+19.6\% [18.0, 21.1] on IDSSE and 18.8\% on Metrica (2 matches, too few for a match-level interval).
 
 \subsection{What drives the bias}
 
@@ -261,6 +267,15 @@ lag}: 11 of 20 stadium cameras show no measurable lag ($-0.8\%$), 0.1\,s gives $
 The shared camera averages these lags away, which is why it shows a smaller carrier bias. An assumed lag of 0.5\,s, as
 in our initial rectangle experiments, overstates the carrier bias (Table~\ref{tab:bias}).
 
+\subsection{Correcting the bias}
+
+Since the undercount of active pressers is nearly linear in the number of visible players, we correct a broadcast's
+value by fitting $\text{bias} = k \cdot \text{visible} + b$ across broadcasts and dividing by $1 + \text{bias}$. We
+evaluate this strictly: for each of the 360 team-broadcasts (20 stadium cameras $\times$ 9 matches $\times$ 2 teams),
+the line is fitted without that stadium camera \emph{and} without that match. The correction reduces the mean absolute
+error from 21.8\% to 3.1\% (mean error $+0.0\%$; 95\% of broadcasts within $\pm 7.3\%$). The pooled slope is 4.1
+percentage points per visible player.
+
 % ---------------------------------------------------------------------------------------------
 \section{Discussion}
 
@@ -269,9 +284,10 @@ camera does not lag. Team-wide pressing metrics, such as the number of players i
 about one fifth on average and by up to 29\% for tightly framed broadcasts. Comparing teams or matches filmed with
 different camera styles can therefore be misleading.
 
-\textbf{Correction.} Because both drivers, visible players and camera lag, can be measured on the broadcast itself,
-a simple correction is possible: estimate the expected undercount from the per-frame number of visible players and
-rescale. \todo{Fit and validate the correction with leave-one-stadium-out evaluation (next step).}
+\textbf{Correction in practice.} The number of visible players can be counted on any broadcast, so the correction
+needs no full tracking at inference time. Our evaluation uses the exact number of visible players from the
+simulation; on real video, detection errors and replays will add noise. The correction targets a match-level mean;
+frame-level correction and correcting carrier pressure for camera lag are left for future work.
 
 \textbf{Limitations.} The ground truth covers 9 matches from two sources, with one team in 5 of the 7 IDSSE matches.
 The camera is fitted on A-League broadcasts; other leagues may be filmed differently. SkillCorner's detection flags
@@ -285,7 +301,8 @@ camera cuts are not modelled. Metrica possession is reconstructed from hand-anno
 Using a broadcast camera fitted to and validated on real footage, we showed that broadcast tracking undercounts a
 team's active pressers by about one fifth (22.6\% [19.8, 25.2]), robustly across matches, stadium cameras and a second
 data provider, while pressure on the ball carrier is nearly unbiased unless the camera lags. Both effects are almost
-fully explained by quantities measurable on the broadcast, which opens the way to correcting broadcast pressing metrics.
+fully explained by quantities measurable on the broadcast, and a correction based on the number of visible players
+reduces the error in active pressers from 21.8\% to 3.1\% on unseen stadiums and matches.
 
 \subsubsection*{Data and code availability.}
 Code, fitted camera parameters and scripts to rebuild every table and figure: \cite{pitchlens}. Data are downloaded

@@ -322,6 +322,24 @@ def _cmd_stadium_summary(args: argparse.Namespace) -> None:
     print(f"Saved -> {out / 'stadium_intervals.csv'} and stadium_per_camera.csv")
 
 
+def _cmd_bias_correction(args: argparse.Namespace) -> None:
+    """RQ3: correct active pressers from the number of visible players (strict evaluation)."""
+    import json
+
+    from pitchlens.analytics.correction import broadcast_table, evaluate_correction
+
+    table = pl.concat(
+        [broadcast_table(_load_visibility(d)) for d in args.dirs], how="vertical_relaxed"
+    )
+    res, summary = evaluate_correction(table)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    res.write_csv(out / "correction_per_broadcast.csv")
+    (out / "correction_summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+    print(f"Saved -> {out}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="pitchlens", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -373,6 +391,11 @@ def main(argv: list[str] | None = None) -> None:
     ci.add_argument("--level", type=float, default=0.95)
     ci.add_argument("--seed", type=int, default=0)
     ci.set_defaults(func=_cmd_visibility_ci)
+
+    bc = sub.add_parser("bias-correction", help="RQ3: correct pressing bias from visible players")
+    bc.add_argument("--dirs", nargs="+", default=["outputs/stadiums/idsse", "outputs/stadiums/metrica"])
+    bc.add_argument("--out", default="outputs/correction")
+    bc.set_defaults(func=_cmd_bias_correction)
 
     ss = sub.add_parser("stadium-summary", help="RQ2 part 2: bias across stadium cameras")
     ss.add_argument("--dir", default="outputs/stadiums/idsse")

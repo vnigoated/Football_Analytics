@@ -19,10 +19,12 @@ python paper/make_figures.py
 
 ## Before submission
 
-- Search the PDF for red **[TODO: …]** markers and resolve each one.
-- Check every entry in `refs.bib` marked `TODO verify`.
-- Read arXiv 2607.11548 in full and check how we describe it.
-- Repeat the Metrica equal-visibility comparison with the fitted camera.
-- Fit and validate the bias correction (leave-one-stadium-out), or drop the claim.
-- Make the repo public and archive a release (Zenodo DOI); fill in authors and affiliations.
-- Check the workshop's page limit, anonymity rules and template version.
+- [x] Author and affiliation.
+- [ ] `refs.bib`: complete the Graph Imputer author list, the authors of the *Science and Medicine in Football* paper,
+      and the first names for Penn, Donnelly and Bhatt (publisher pages need a browser login).
+- [ ] Make the repo public and archive a release (Zenodo DOI).
+- [ ] Check the workshop's page limit, anonymity rules and template version.
+- [x] Read arXiv 2607.11548 in full and describe it accurately (2026-11-22).
+- [x] Novelty search: no published work measures pressing on broadcast data (2026-11-22).
+- [x] Metrica equal-visibility comparison with the fitted cameras.
+- [x] Bias correction, strict leave-stadium-and-match-out evaluation (`pitchlens bias-correction`).
