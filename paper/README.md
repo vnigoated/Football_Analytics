@@ -19,7 +19,7 @@ python paper/make_figures.py
 
 ## Before submission
 
-- [ ] Fill in the affiliation (red **[TODO]** in the PDF).
+- [x] Author and affiliation.
 - [ ] `refs.bib`: complete the Graph Imputer author list, the authors of the *Science and Medicine in Football* paper,
       and the first names for Penn, Donnelly and Bhatt (publisher pages need a browser login).
 - [ ] Make the repo public and archive a release (Zenodo DOI).
