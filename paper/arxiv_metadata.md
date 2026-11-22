@@ -8,9 +8,7 @@ How Much Can You Trust Broadcast Pressing Data? Visibility Bias in Football Trac
 
 ## Authors
 
-Varun Inamdar, Vedant Pandhare, Aadarsh Pathre, Piyush Dhoka
-
-(arXiv form: enter them in this order, one per line or comma-separated; affiliation Vishwakarma University)
+Varun Inamdar (Vishwakarma University)
 
 ## Abstract
 
