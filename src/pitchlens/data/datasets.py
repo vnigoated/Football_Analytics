@@ -73,3 +73,12 @@ def download_sn_gsr(
         allow_patterns=[f"{s}.zip" for s in splits],
     )
     return Path(path)
+
+
+def load_tracking(match_id: str, limit: int | None = None):
+    """Load any supported match: IDSSE ids (e.g. ``J03WPY``) or ``metrica-1`` / ``metrica-2``."""
+    if match_id.startswith("metrica-"):
+        from pitchlens.data.metrica import load_metrica_tracking
+
+        return load_metrica_tracking(match_id, limit=limit)
+    return load_idsse_tracking(match_id, limit=limit)

@@ -54,7 +54,7 @@ def plot_pressing_timeline(
         ax.grid(alpha=0.3)
     axes[0][0].set_ylabel("Mean pressure on ball carrier")
     axes[0][0].legend(title="Pressing team", fontsize=8, loc="best")
-    fig.suptitle("Pressing intensity: full IDSSE tracking (ground-truth baseline)")
+    fig.suptitle("Pressing intensity: full tracking (ground-truth baseline)")
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
