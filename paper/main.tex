@@ -7,11 +7,9 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{siunitx}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
-\sisetup{group-separator={,}}
 
 \begin{document}
 
@@ -55,8 +53,8 @@ academically~\cite{somers2024gsr,smf2025broadcast}. Its main limitation is struc
 the action, so players far from the ball are often off screen.
 
 For spatial metrics such as pitch control, this partial view is known to cause large errors in the hidden areas of
-the pitch~\cite{offscreen2026}, and several methods impute off-screen players~\cite{omidshafiei2022graphimputer,%
-rsos2025continuous,offscreen2026}. For pressing metrics the size of the bias, what drives it, and how certain we can
+the pitch~\cite{offscreen2026}, and several methods impute off-screen
+players~\cite{omidshafiei2022graphimputer,rsos2025continuous,offscreen2026}. For pressing metrics the size of the bias, what drives it, and how certain we can
 be about it have not been measured. Because pressing is defined by defenders \emph{near} the ball and also by those
 covering passing lanes further away, it is not obvious whether a ball-following camera biases it at all.
 
@@ -84,7 +82,7 @@ visible players and camera lag, and a correction that removes most of it on held
 \textbf{Broadcast tracking.} SoccerNet Game State Reconstruction~\cite{somers2024gsr} benchmarks the extraction of
 player positions on a minimap from broadcast video; commercial providers deliver broadcast tracking at scale
 (e.g.\ SkillCorner~\cite{skillcorner_opendata}). Comparing broadcast-derived with official tracking,
-\cite{smf2025broadcast} found that less than half of the players' activity is visible on TV broadcasts and concluded
+Bassek et al.~\cite{smf2025broadcast} found that less than half of the players' activity is visible on TV broadcasts and concluded
 that some tactical analyses remain reliable, while physical metrics are more affected by the missing data. We show that
 one central tactical metric, team-wide pressing, is in fact strongly biased.
 
@@ -106,9 +104,10 @@ on positions and velocities. Related spatial models include pitch control~\cite{
 
 \textbf{Ground truth.} The IDSSE open dataset~\cite{bassek2025idsse} (CC-BY 4.0) contains optical tracking of all
 22 players and the ball at 25\,Hz for 7 matches of the 2022/23 Bundesliga and 2.~Bundesliga, with possession
-information. After keeping ball-in-play frames, 552{,}294 frames remain. As a replication we use the 2 Metrica Sports
+information. All tracking data are loaded with kloppy~\cite{kloppy}. After keeping ball-in-play frames, 552{,}294
+frames remain. As a replication we use the 2 Metrica Sports
 sample games~\cite{metrica_sample} (25\,Hz, all players), for which we reconstruct possession and ball-in-play status
-from the accompanying event file (166{,}913 frames). One team, Fortuna Düsseldorf, appears in 5 of the 7 IDSSE
+from the accompanying event file (166{,}913 frames). One team, Fortuna D\"usseldorf, appears in 5 of the 7 IDSSE
 matches; Metrica's anonymised teams provide an independent check.
 
 \textbf{Real broadcasts.} The SkillCorner open data~\cite{skillcorner_opendata} (MIT licence) contains broadcast
@@ -179,8 +178,8 @@ close to the camera.}
 
 The fitted camera stands on the halfway line, 57--97\,m from the pitch centre depending on the stadium. Its pan
 follows the ball and the players' centre with similar weights ($g_b = 0.57$, $g_p = 0.56$; $R^2 = 0.97$) and
-\textbf{without measurable lag} (best $\lambda = 0$\,s for the shared camera). The median field of view is 27°
-(19--40°): it narrows when play is far away and widens when players are spread ($R^2 = 0.48$); the bottom edge moves
+\textbf{without measurable lag} (best $\lambda = 0$\,s for the shared camera). The median field of view is 27$^\circ$
+(19--40$^\circ$): it narrows when play is far away and widens when players are spread ($R^2 = 0.48$); the bottom edge moves
 away with the ball ($R^2 = 0.60$). Figure~\ref{fig:cameras} shows the resulting footprint.
 
 \begin{table}[t]
@@ -188,6 +187,7 @@ away with the ball ($R^2 = 0.60$). Figure~\ref{fig:cameras} shows the resulting 
 \caption{Which players are on screen? Agreement of each camera model with SkillCorner's per-player detection flags on
 10 held-out matches.}
 \label{tab:validation}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lcc}
 \toprule
 Camera model & Agreement & Visible players / frame \\
@@ -200,7 +200,7 @@ Wedge camera following the ball only & 82.0\% & 13.30 \\
 \midrule
 Real broadcast & -- & 14.65 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 Table~\ref{tab:validation} shows that the fitted camera beats the rectangle on all 10 held-out matches (84.0--88.9\%
@@ -214,7 +214,7 @@ underestimates visibility; adding random framing noise also made predictions wor
 \caption{Relative bias of pressing metrics under different cameras (negative = undercount). 95\% block-bootstrap
 intervals; the stadium ensemble interval includes camera, match and within-match variation.}
 \label{tab:bias}
-\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{llccc}
 \toprule
 Data & Camera & Visible & Pressure on carrier & Active pressers \\
@@ -227,7 +227,7 @@ IDSSE & \textbf{20 stadium cameras} & 12.1--16.0 & $\mathbf{-1.7\%}$ [$-2.2$, $-
 Metrica & Fitted shared camera & 14.5 & $-0.7\%$ [$-1.0$, $-0.5$] & $-17.7\%$ [$-20.8$, $-15.1$] \\
 Metrica & \textbf{20 stadium cameras} & 12.8--16.6 & $\mathbf{-1.8\%}$ [$-2.3$, $-1.3$] & $\mathbf{-19.0\%}$ [$-22.0$, $-16.1$] \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 Table~\ref{tab:bias} summarises the main result. With every camera model, broadcast tracking undercounts a team's
