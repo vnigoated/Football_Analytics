@@ -88,3 +88,93 @@ def _ema(x: np.ndarray, a: float) -> np.ndarray:
     for t in range(1, len(x)):
         out[t] = a * out[t - 1] + (1 - a) * x[t]
     return out
+
+
+@dataclass
+class WedgeCamera:
+    """Main broadcast camera as a fixed point that pans, zooms and tilts.
+
+    Coordinates are centred on the pitch (metres, x along the length). The camera
+    stands at ``(cam_x, cam_y)`` behind the near touchline. A player is visible when
+    their bearing from the camera lies within ``pan +- fov/2`` and they are beyond the
+    bottom image edge (``near``: distance along the viewing direction).
+
+    - pan  = EMA_lag(pan_gain * ball_bearing + pan_gain_players * players_bearing
+             + pan_offset) + noise
+    - fov  = clip(fov_a + fov_b * ball_distance + fov_c * players_spread) + noise
+    - near = near_a + near_b * ball_distance + noise (always in front of the ball)
+
+    Noise is an AR(1) process with time constant ``noise_tau_s`` (``seed=None`` turns it
+    off). Default values are placeholders; fit them with ``pitchlens fit-camera``.
+    Angles are in radians.
+    """
+
+    cam_x: float = 0.0
+    cam_y: float = -57.0
+    pan_gain: float = 0.9
+    pan_gain_players: float = 0.0  # weight of the players' bearing (operator frames play)
+    pan_offset: float = 0.0
+    lag_s: float = 0.2
+    fov_a: float = 0.8
+    fov_b: float = -0.005
+    fov_c: float = 0.0  # zoom out when players are spread (std of their bearings, rad)
+    fov_min: float = 0.3
+    fov_max: float = 0.8
+    near_a: float = 0.0
+    near_b: float = 0.6
+    pan_noise_sd: float = 0.0
+    fov_noise_sd: float = 0.0
+    near_noise_sd: float = 0.0
+    noise_tau_s: float = 5.0
+    fps: float = 25.0
+    seed: int | None = None
+    pitch_length: float = 105.0
+    pitch_width: float = 68.0
+
+    def _noise(self, n: int, sd: float, rng) -> np.ndarray:
+        if rng is None or sd <= 0 or n == 0:
+            return np.zeros(n)
+        rho = float(np.exp(-1.0 / (self.fps * self.noise_tau_s)))
+        e = rng.standard_normal(n) * sd * np.sqrt(1 - rho**2)
+        out = np.empty(n)
+        out[0] = rng.standard_normal() * sd
+        for t in range(1, n):
+            out[t] = rho * out[t - 1] + e[t]
+        return out
+
+    def path(
+        self,
+        ball_xy: np.ndarray,
+        rng=None,
+        players_bearing: np.ndarray | None = None,
+        players_spread: np.ndarray | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Per-frame ``pan``, ``half_fov`` and ``near`` for a (T, 2) centred ball trajectory.
+
+        ``players_bearing`` / ``players_spread``: per-frame mean and std of the players'
+        bearings from the camera (used when ``pan_gain_players`` / ``fov_c`` are set).
+        """
+        ball_xy = np.asarray(ball_xy, dtype=np.float64)
+        dx, dy = ball_xy[:, 0] - self.cam_x, ball_xy[:, 1] - self.cam_y
+        bearing, dist = np.arctan2(dx, dy), np.hypot(dx, dy)
+        alpha = float(np.exp(-1.0 / (self.fps * self.lag_s))) if self.lag_s > 0 else 0.0
+        n = len(ball_xy)
+        pb = bearing if players_bearing is None else np.nan_to_num(players_bearing, nan=0.0)
+        sp = np.zeros(n) if players_spread is None else np.nan_to_num(players_spread, nan=0.0)
+        target = self.pan_gain * bearing + self.pan_gain_players * pb + self.pan_offset
+        pan = _ema(target[:, None], alpha)[:, 0]
+        pan += self._noise(n, self.pan_noise_sd, rng)
+        fov = self.fov_a + self.fov_b * dist + self.fov_c * sp
+        fov = np.clip(fov, self.fov_min, self.fov_max)
+        fov = np.clip(fov + self._noise(n, self.fov_noise_sd, rng), 0.05, np.pi / 2)
+        near = self.near_a + self.near_b * dist + self._noise(n, self.near_noise_sd, rng)
+        near = np.minimum(near, dist * np.cos(bearing - pan) - 1.0)  # keep the ball on screen
+        return {"pan": pan, "half_fov": fov / 2, "near": near}
+
+    def visible(self, xy: np.ndarray, pan: float, half_fov: float, near: float) -> np.ndarray:
+        """Boolean mask over (N, 2) centred positions for one frame."""
+        xy = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
+        dx, dy = xy[:, 0] - self.cam_x, xy[:, 1] - self.cam_y
+        rel = (np.arctan2(dx, dy) - pan + np.pi) % (2 * np.pi) - np.pi
+        depth = dx * np.sin(pan) + dy * np.cos(pan)
+        return (np.abs(rel) <= half_fov) & (depth >= near)

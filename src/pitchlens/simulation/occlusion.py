@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from pitchlens.simulation.camera import BroadcastCamera
+from pitchlens.simulation.camera import BroadcastCamera, WedgeCamera
 
 KEYS = ["period_id", "frame_id"]
 
@@ -56,9 +56,58 @@ def camera_path(
     return pl.concat(parts)
 
 
+def wedge_path(tracking: pl.DataFrame, camera: WedgeCamera) -> pl.DataFrame:
+    """Per-frame ``pan``, ``half_fov`` and ``near`` of a WedgeCamera (centred coordinates)."""
+    rng = np.random.default_rng(camera.seed) if camera.seed is not None else None
+    ball = (
+        tracking.filter(pl.col("id") == "ball")
+        .select(*KEYS, "x", "y")
+        .unique(subset=KEYS, keep="first")
+        .sort(KEYS)
+        .with_columns(
+            pl.col("x", "y").fill_nan(None).forward_fill().backward_fill().over("period_id")
+        )
+    )
+    bearing = pl.arctan2(pl.col("x") - camera.cam_x, pl.col("y") - camera.cam_y)
+    players = (
+        tracking.filter(pl.col("id") != "ball")
+        .group_by(KEYS)
+        .agg(bearing.mean().alias("pb"), bearing.std().alias("ps"))
+    )
+    ball = ball.join(players, on=KEYS, how="left").sort(KEYS)
+    parts = []
+    for _, part in ball.group_by("period_id", maintain_order=True):
+        st = camera.path(
+            np.nan_to_num(part.select("x", "y").to_numpy().astype(np.float64)),
+            rng,
+            players_bearing=part["pb"].to_numpy(),
+            players_spread=part["ps"].to_numpy(),
+        )
+        parts.append(
+            part.select(KEYS).with_columns(
+                pl.Series("pan", st["pan"]),
+                pl.Series("half_fov", st["half_fov"]),
+                pl.Series("near", st["near"]),
+            )
+        )
+    return pl.concat(parts)
+
+
+def _apply_wedge(tracking: pl.DataFrame, camera: WedgeCamera, keep_carrier: bool) -> pl.DataFrame:
+    dx, dy = pl.col("x") - camera.cam_x, pl.col("y") - camera.cam_y
+    d = pl.arctan2(dx, dy) - pl.col("pan")
+    rel = pl.arctan2(d.sin(), d.cos())  # wrapped to (-pi, pi]
+    depth = dx * pl.col("pan").sin() + dy * pl.col("pan").cos()
+    keep = ((rel.abs() <= pl.col("half_fov")) & (depth >= pl.col("near"))) | (pl.col("id") == "ball")
+    if keep_carrier and "is_ball_carrier" in tracking.columns:
+        keep = keep | pl.col("is_ball_carrier")
+    path = wedge_path(tracking, camera)
+    return tracking.join(path, on=KEYS, how="left").filter(keep).drop("pan", "half_fov", "near")
+
+
 def apply_broadcast_view(
     tracking: pl.DataFrame,
-    camera: BroadcastCamera,
+    camera: BroadcastCamera | WedgeCamera,
     centred: bool = True,
     keep_carrier: bool = True,
 ) -> pl.DataFrame:
@@ -67,6 +116,10 @@ def apply_broadcast_view(
     ``keep_carrier`` keeps the ball carrier even if the (lagging) camera misses them
     (a broadcast camera essentially always shows the player on the ball).
     """
+    if isinstance(camera, WedgeCamera):
+        if not centred:
+            raise ValueError("WedgeCamera expects centred coordinates")
+        return _apply_wedge(tracking, camera, keep_carrier)
     ox, oy = (camera.pitch_length / 2, camera.pitch_width / 2) if centred else (0.0, 0.0)
     L, W, eps = camera.pitch_length, camera.pitch_width, 1e-6
     path = camera_path(tracking, camera, centred=centred)

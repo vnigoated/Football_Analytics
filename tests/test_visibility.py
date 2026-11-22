@@ -102,3 +102,22 @@ def test_perspective_far_side_sees_more():
         t, BroadcastCamera(view_length=40, perspective=0.3), keep_carrier=False
     )
     assert sorted(persp["id"].to_list()) == ["ball", "far"]
+
+
+def test_wedge_camera_pans_with_ball():
+    from pitchlens.simulation.camera import WedgeCamera
+
+    cam = WedgeCamera(cam_x=0, cam_y=-57, pan_gain=1.0, lag_s=0, fov_a=0.5, fov_b=0.0,
+                      fov_min=0.1, fov_max=1.0, near_a=0.0, near_b=0.0)  # fmt: skip
+    t = pl.DataFrame(
+        {
+            "period_id": [1] * 4,
+            "frame_id": [1] * 4,
+            "id": ["ball", "with_ball", "other_wing", "behind_camera_line"],
+            "x": [30.0, 32.0, -40.0, 30.0],
+            "y": [0.0, 5.0, 0.0, -60.0],
+            "is_ball_carrier": [False] * 4,
+        }
+    )
+    out = apply_broadcast_view(t, cam, keep_carrier=False)
+    assert sorted(out["id"].to_list()) == ["ball", "with_ball"]
