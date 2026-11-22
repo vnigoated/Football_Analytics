@@ -49,3 +49,17 @@ def test_parse_and_count(tmp_path):
     assert s["sequences"] == 1 and s["tracks"] == 5
     assert s["visible_players_mean"] == 2.0
     assert s["players_with_pitch_pos_share"] == 0.75
+    assert s["implausible_pos_share"] == 0.0
+
+
+def test_implausible_positions_are_flagged(tmp_path):
+    labels = _labels()
+    labels["annotations"][1]["bbox_pitch"] = {"x_bottom_middle": 4886.0, "y_bottom_middle": 0.0}
+    seq = tmp_path / "SNGS-002"
+    seq.mkdir()
+    (seq / "Labels-GameState.json").write_text(json.dumps(labels))
+    images, objects = load_split(tmp_path)
+    s = split_summary(images, objects)
+    assert s["implausible_pos_share"] == 0.2  # 1 of 5 objects with a position
+    assert s["frames_with_implausible_pos"] == 1
+    assert s["players_with_pitch_pos_share"] == 0.5  # 2 of 4 players
