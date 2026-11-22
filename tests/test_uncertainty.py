@@ -47,3 +47,23 @@ def test_varying_bias_interval_covers_point_and_widens():
     assert row["pressure_bias"] == pytest.approx(-20.0)
     assert row["pressure_hi"] - row["pressure_lo"] > 5  # match-to-match spread shows up
     assert row["matches"] == 3 and row["team_matches"] == 6
+
+
+def test_stadium_bootstrap_separates_sources():
+    from pitchlens.analytics.uncertainty import stadium_bootstrap
+
+    parts = []
+    for cam, f in (("A", 0.7), ("B", 0.8), ("C", 0.9)):
+        parts.append(
+            _joined({"m1": f, "m2": f}).with_columns(
+                pl.lit(cam).alias("camera"), pl.lit(14.0 + f).alias("players_visible")
+            )
+        )
+    per_cam, iv = stadium_bootstrap(pl.concat(parts), n_boot=300)
+    assert per_cam.height == 3
+    assert per_cam.sort("camera")["pressure_bias"].to_list() == pytest.approx([-30, -20, -10])
+    row = {r["source"]: r for r in iv.filter(pl.col("target") == "pressure").iter_rows(named=True)}
+    assert row["combined"]["bias"] == pytest.approx(-20.0)
+    # every camera has a constant ratio, so matches/blocks add (almost) nothing
+    assert row["matches + within-match"]["hi"] - row["matches + within-match"]["lo"] < 0.5
+    assert row["stadium camera only"]["hi"] - row["stadium camera only"]["lo"] > 5

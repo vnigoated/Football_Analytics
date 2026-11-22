@@ -106,3 +106,92 @@ def bootstrap_bias(
         overall.append(row)
 
     return pl.DataFrame(per_team), pl.DataFrame(overall)
+
+
+def _draw(
+    point: np.ndarray,
+    reps: np.ndarray,
+    groups: list[list[int]],
+    vary_cam: bool,
+    vary_match: bool,
+    vary_block: bool,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Bootstrap replicates of the mean bias over (camera, team) cells.
+
+    ``point``: (cameras, teams); ``reps``: (cameras, teams, n_boot) block-bootstrap
+    replicates; ``groups``: team indices of each match (resampled together).
+    """
+    n_cam, n_team, n_boot = reps.shape
+    all_c, all_k = np.arange(n_cam), np.arange(n_team)
+    out = np.empty(n_boot)
+    for i in range(n_boot):
+        cs = rng.integers(0, n_cam, n_cam) if vary_cam else all_c
+        if vary_match:
+            ks = np.concatenate([groups[j] for j in rng.integers(0, len(groups), len(groups))])
+        else:
+            ks = all_k
+        src = reps[:, :, i] if vary_block else point
+        out[i] = np.nanmean(src[np.ix_(cs, ks)])
+    return out
+
+
+def stadium_bootstrap(
+    joined: pl.DataFrame,
+    block_s: float = 60.0,
+    n_boot: int = 2000,
+    level: float = 0.95,
+    seed: int = 0,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Bias across stadium cameras (RQ2 part 2).
+
+    ``joined`` holds one ``camera`` per stadium. The overall bias is the mean over
+    cameras and team-matches. Intervals are given for each source of uncertainty
+    alone and combined (three-level bootstrap: cameras, matches, 60 s blocks).
+
+    Returns ``(per_camera, intervals)``.
+    """
+    rng = np.random.default_rng(seed)
+    lo_q, hi_q = (1 - level) / 2 * 100, (1 + level) / 2 * 100
+    blocks = block_sums(joined, block_s)
+    cams = sorted(blocks["camera"].unique().to_list())
+    teams = blocks.select("match_id", "pressing_team_name").unique().sort(pl.all()).rows()
+    matches = sorted({m for m, _ in teams})
+    team_idx_of = {m: [i for i, (mm, _) in enumerate(teams) if mm == m] for m in matches}
+
+    vis = joined.group_by("camera").agg(pl.col("players_visible").mean())
+    per_camera, intervals = [], []
+    for t in TARGETS:
+        point = np.full((len(cams), len(teams)), np.nan)
+        reps = np.full((len(cams), len(teams), n_boot), np.nan)
+        for c, cam in enumerate(cams):
+            part = blocks.filter(pl.col("camera") == cam)
+            for k, (m, team) in enumerate(teams):
+                b = part.filter((pl.col("match_id") == m) & (pl.col("pressing_team_name") == team))
+                if b.height == 0:
+                    continue
+                gt, sim = b[f"{t}_gt"].to_numpy(), b[f"{t}_sim"].to_numpy()
+                point[c, k] = (sim.sum() / gt.sum() - 1.0) * 100.0
+                reps[c, k] = _boot_ratio(gt, sim, n_boot, rng)
+        for c, cam in enumerate(cams):
+            per_camera.append({"camera": cam, "target": t, "bias": float(np.nanmean(point[c]))})
+
+        groups = [team_idx_of[m] for m in matches]
+        est = float(np.nanmean(point))
+        for name, flags in (
+            ("stadium camera only", (True, False, False)),
+            ("matches + within-match", (False, True, True)),
+            ("combined", (True, True, True)),
+        ):
+            boot = _draw(point, reps, groups, *flags, rng=rng)
+            lo, hi = np.nanpercentile(boot, [lo_q, hi_q])
+            intervals.append({"target": t, "source": name, "bias": est, "lo": lo, "hi": hi})
+
+    per_cam = (
+        pl.DataFrame(per_camera)
+        .pivot(on="target", index="camera", values="bias")
+        .rename({"pressure": "pressure_bias", "active": "active_bias"})
+        .join(vis, on="camera")
+        .sort("players_visible")
+    )
+    return per_cam, pl.DataFrame(intervals)
