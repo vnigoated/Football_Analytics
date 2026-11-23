@@ -11,6 +11,13 @@ matches if the box centres are within 10 px (a ball box is only a few pixels wid
 RF-DETR Medium (Apache-2.0, COCO-pretrained), resolution 896, effective batch 16, lr 1e-4, early stopping
 (patience 4). Stopped after 10 epochs (~33 min); best EMA checkpoint at epoch 5.
 
+Training details (from the RF-DETR log): 34.1 M trainable parameters (LW-DETR architecture, windowed DINOv2-small
+backbone, patch 16, 300 queries, 4 decoder layers); detection head re-initialised from the 90-class COCO checkpoint
+to 4 classes; bfloat16 mixed precision; square resize to 896 with multi-scale training (scale 1056 also used);
+EMA weights selected as best (`checkpoint_best_total.pth`); 2,680 optimiser steps. Final training loss 4.92
+(classification 0.49, box L1 0.010, GIoU 0.21). GPU and library versions were printed by the install cell but not
+recorded for run 1; record them for run 2.
+
 **RF-DETR COCO metrics (valid):** mAP@50 0.626, mAP@50:95 0.364, mAP@75 0.381, mAR 0.527.
 
 | Class | Ground truth | Predicted | Recall | Precision |
@@ -26,7 +33,9 @@ Speed: 41 images/s at 896 px (batch 16, including image loading), faster than re
 **Finding: the detector finds people well; the role label is the problem.** Referee precision is 0.28 because
 players whose kit resembles a referee kit (e.g. yellow) are labelled "referee", while referees in an unusual kit
 are missed. The kit colour that marks a referee changes from match to match, which a single-frame detector cannot
-know. Ignoring roles, 94.9% of people are found at 90.3% precision. The score plateaued from the first epoch
+know. Example (valid clip SNGS-059, Young Boys in yellow and black): the home players were predicted as
+"referee", and the actual referee, dressed in black, was not detected; in other clips the yellow-clad referees were
+labelled correctly. Ignoring roles, 94.9% of people are found at 90.3% precision. The score plateaued from the first epoch
 (0.353 → 0.364), so more epochs would not fix the role confusion.
 
 **Decision:** detect only *person* and *ball*; assign roles (team A, team B, goalkeeper, referee) per clip in A4,
