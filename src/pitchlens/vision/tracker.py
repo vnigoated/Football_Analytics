@@ -267,6 +267,59 @@ def headline(result: dict[str, Any]) -> dict[str, float]:
     }
 
 
+_GRID_DATA: dict[str, dict[str, Any]] = {}
+
+
+def _grid_init(data: dict[str, dict[str, Any]]) -> None:
+    _GRID_DATA.clear()
+    _GRID_DATA.update(data)
+
+
+def _grid_score(job: tuple[str, dict[str, Any]]) -> dict[str, Any]:
+    name, params = job
+    m, _ = evaluate_split(_GRID_DATA, name, **params)
+    return {**params, **m}
+
+
+def grid_search(
+    data: dict[str, dict[str, Any]],
+    grid: list[dict[str, Any]],
+    name: str = "bytetrack",
+    workers: int | None = None,
+    log: Callable[[str], None] | None = print,
+) -> pl.DataFrame:
+    """Score every setting in ``grid`` on ``data`` in parallel; best HOTA first.
+
+    Workers are started with "spawn" and one thread each: forking a process that already
+    uses polars' thread pool can hang.
+    """
+    import multiprocessing as mp
+    import os
+    import time
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    workers = workers or os.cpu_count() or 1
+    saved = {k: os.environ.get(k) for k in ("POLARS_MAX_THREADS", "OMP_NUM_THREADS")}
+    os.environ.update(POLARS_MAX_THREADS="1", OMP_NUM_THREADS="1")  # inherited by the workers
+    rows, t0 = [], time.time()
+    try:
+        with ProcessPoolExecutor(
+            workers, mp_context=mp.get_context("spawn"), initializer=_grid_init, initargs=(data,)
+        ) as pool:
+            futures = [pool.submit(_grid_score, (name, p)) for p in grid]
+            for i, fut in enumerate(as_completed(futures), 1):
+                rows.append(fut.result())
+                if log:
+                    log(f"{i}/{len(grid)} done, HOTA {rows[-1]['HOTA']:.4f}, {time.time() - t0:.0f} s")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return pl.DataFrame(rows).sort("HOTA", descending=True)
+
+
 def evaluate_split(
     data: dict[str, dict[str, Any]],
     name: str = "bytetrack",

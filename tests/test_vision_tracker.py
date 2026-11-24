@@ -84,3 +84,14 @@ def test_gap_is_bridged():
     assert filled.height - tracks.height == 5  # the 5 missing boxes restored
     assert headline(evaluate(gt, filled, frames))["DetA"] > headline(evaluate(gt, tracks, frames))["DetA"]
     assert np.isclose(filled.filter((pl.col("frame") == 17) & (pl.col("x1") < 500))["x1"].item(), 270.0)
+
+
+def test_grid_search_parallel():
+    pytest.importorskip("trackers")
+    from pitchlens.vision.tracker import grid_search
+
+    gt, dets = _two_players()
+    data = {"a": {"dets": dets, "gt": gt, "frames": list(range(1, 41)), "eval_frames": list(range(1, 41))}}
+    grid = [{"minimum_consecutive_frames": c} for c in (1, 3)]
+    out = grid_search(data, grid, workers=2, log=None)
+    assert out.height == 2 and out["HOTA"][0] >= out["HOTA"][1]
