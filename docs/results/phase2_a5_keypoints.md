@@ -70,6 +70,21 @@ over 5 m: 9–11% bad.
 shows the typical case: the camera stays in midfield, where the only landmarks are the halfway line (one straight
 line) and a few centre-circle points; the network finds them correctly, but they do not determine the view.
 
-**Fix:** require at least 5 inliers (`homography_from_keypoints(min_inliers=5)`); rejected frames get their
-homography from neighbouring frames (A6). Longer term: more landmarks on the centre circle and along the lines, so
+**Fix:** require a minimum number of inliers; rejected frames get their homography from neighbouring frames (A6). Longer term: more landmarks on the centre circle and along the lines, so
 midfield views have enough points.
+
+### Minimum number of inliers (same predictions, valid)
+
+| Min. inliers | Frames with homography | Median error | Mean | 90th pct | Within 1 m | Within 2 m |
+|---|---|---|---|---|---|---|
+| 4 (run 1) | 98.8% | 0.69 m | 4.71 m | 3.23 m | 64.6% | 83.8% |
+| 5 | 91.1% | 0.64 m | 1.21 m | 2.17 m | 68.7% | 88.8% |
+| **6 (default)** | **84.7%** | **0.61 m** | **0.94 m** | **1.96 m** | **70.6%** | **90.4%** |
+| 7 | 71.8% | 0.63 m | 0.97 m | 2.02 m | 69.5% | 89.9% |
+
+**Chosen: 6.** The mean error falls from 4.71 m to 0.94 m and 90% of people are placed within 2 m; 15% of frames
+get no homography of their own. With 7, more frames are lost without any gain.
+
+**A5 result for the paper:** player pitch positions from single broadcast frames with a median error of 0.61 m
+(mean 0.94 m, 90% within 2 m) in 84.7% of frames, from a network trained only on labels derived from SN-GSR player
+positions.

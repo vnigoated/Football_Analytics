@@ -62,7 +62,7 @@ def test_heatmap_roundtrip_and_homography():
     assert ((dec[:, 2] > 0) == inside).all()
     assert np.abs(dec[inside, :2] - uv[inside]).max() < 4.0  # within a few source pixels
     Hk, n = homography_from_keypoints(dec)
-    assert Hk is not None and n == inside.sum()
+    assert Hk is not None and n == inside.sum() >= 6
     assert np.median(position_errors(Hk, _people())) < 0.5
     keep = [KEYPOINT_NAMES.index(n) for n in ("halfway_top", "circle_bottom", "left_pa_tr", "right_pa_tl")]
     assert (dec[keep, 2] > 0).all()  # four detections, no three on one line

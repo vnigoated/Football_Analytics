@@ -171,13 +171,14 @@ def decode_heatmaps(hm: np.ndarray, src_size: tuple[int, int] = (1920, 1080),
     return out
 
 
-def homography_from_keypoints(kp: np.ndarray, min_inliers: int = 5,
+def homography_from_keypoints(kp: np.ndarray, min_inliers: int = 6,
                               ransac_m: float = 1.0) -> tuple[np.ndarray | None, int]:
     """Image -> pitch homography from detected keypoints (score > 0); (None, n) if fewer than ``min_inliers``
     keypoints agree.
 
     Four points always fit a homography exactly, so a 4-inlier fit cannot be checked: on SN-GSR valid 86% of
-    them were wrong (A5 run 1). Requiring 5+ inliers keeps at least one point that verifies the fit.
+    them were wrong (A5 run 1). With 6+ inliers the mean player error fell from 4.71 m to 0.94 m, at the cost of
+    15% of frames without a homography (filled from neighbouring frames downstream).
     """
     ok = kp[:, 2] > 0
     if ok.sum() < max(min_inliers, 4):
