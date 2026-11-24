@@ -179,27 +179,30 @@ def pca(x: np.ndarray, dims: int) -> np.ndarray:
     return xc @ vt[:dims].T
 
 
-def kmeans(x: np.ndarray, k: int, restarts: int = 8, iters: int = 100, seed: int = 0) -> np.ndarray:
-    """Plain k-means with k-means++ starts; returns a label per row (best of ``restarts``)."""
+def kmeans(x: np.ndarray, k: int, restarts: int = 8, iters: int = 100, seed: int = 0,
+           weights: np.ndarray | None = None) -> np.ndarray:
+    """(Weighted) k-means with k-means++ starts; returns a label per row (best of ``restarts``)."""
     n = len(x)
     if n <= k:
         return np.arange(n)
+    w = np.ones(n) if weights is None else np.asarray(weights, dtype=float)
     rng = np.random.default_rng(seed)
     best, best_inertia = None, np.inf
     for _ in range(restarts):
-        c = [x[rng.integers(n)]]
+        c = [x[rng.choice(n, p=w / w.sum())]]
         for _ in range(1, k):
-            d = np.min(((x[:, None] - np.array(c)[None]) ** 2).sum(-1), axis=1)
+            d = np.min(((x[:, None] - np.array(c)[None]) ** 2).sum(-1), axis=1) * w
             c.append(x[rng.choice(n, p=d / d.sum()) if d.sum() > 0 else rng.integers(n)])
         c = np.array(c)
         for _ in range(iters):
             d = ((x[:, None] - c[None]) ** 2).sum(-1)
             lab = d.argmin(1)
-            new = np.array([x[lab == j].mean(0) if (lab == j).any() else c[j] for j in range(k)])
+            new = np.array([np.average(x[lab == j], axis=0, weights=w[lab == j]) if (lab == j).any() else c[j]
+                            for j in range(k)])
             if np.allclose(new, c):
                 break
             c = new
-        inertia = d[np.arange(n), lab].sum()
+        inertia = (d[np.arange(n), lab] * w).sum()
         if inertia < best_inertia:
             best, best_inertia = lab, inertia
     return best
@@ -221,6 +224,37 @@ def assign_teams(crop_ids: np.ndarray, features: np.ndarray, k: int = 3, dims: i
         vals, counts = np.unique(crop_label[crop_ids == tid], return_counts=True)
         out[int(tid)] = str(vals[counts.argmax()])
     return out
+
+
+def assign_teams_by_track(
+    crop_ids: np.ndarray,
+    features: np.ndarray,
+    heights: np.ndarray | None = None,
+    k: int = 2,
+    min_height: float = 40.0,
+    dims: int = 16,
+) -> dict[int, str]:
+    """Like ``assign_teams``, but clusters one averaged feature per *track*.
+
+    Averaging a track's crops removes most noise (motion blur, a passing shadow, another player in the box);
+    only crops at least ``min_height`` px tall are averaged when the track has any. Tracks are weighted by their
+    number of crops, so a long track counts more than a short fragment.
+    """
+    ids = np.unique(crop_ids)
+    good = np.ones(len(crop_ids), bool) if heights is None else np.asarray(heights) >= min_height
+    means, w = [], []
+    for t in ids:
+        m = crop_ids == t
+        use = m & good if (m & good).any() else m
+        v = features[use].mean(0)
+        means.append(v / max(np.linalg.norm(v), 1e-9))
+        w.append(m.sum())
+    w = np.array(w, float)
+    lab = kmeans(pca(np.stack(means), dims), k, weights=w)
+    sizes = np.bincount(lab, weights=w, minlength=k)
+    order = np.argsort(-sizes)
+    name = {int(order[0]): "team_a", int(order[1]): "team_b"} if k >= 2 else {int(order[0]): "team_a"}
+    return {int(t): name.get(int(j), "other") for t, j in zip(ids, lab, strict=True)}
 
 
 # ---------------------------------------------------------------- evaluation

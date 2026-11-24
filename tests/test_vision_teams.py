@@ -3,6 +3,7 @@ import polars as pl
 
 from pitchlens.vision.teams import (
     assign_teams,
+    assign_teams_by_track,
     colour_feature,
     evaluate_teams,
     kmeans,
@@ -55,6 +56,8 @@ def test_assign_teams_with_referee():
     assert len({labels[i] for i in range(4)}) == 1 and len({labels[i] for i in range(4, 8)}) == 1
     assert labels[0] != labels[4] and {labels[0], labels[4]} == {"team_a", "team_b"}
     assert labels[8] == "other"
+    by_track = assign_teams_by_track(np.array(ids), np.stack(feats), k=3)
+    assert by_track[0] == by_track[3] != by_track[4] == by_track[7] and by_track[8] == "other"
 
 
 def test_sample_crops_covers_every_track():
