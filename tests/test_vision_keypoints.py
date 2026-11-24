@@ -63,6 +63,10 @@ def test_heatmap_roundtrip_and_homography():
     Hk, n = homography_from_keypoints(dec)
     assert Hk is not None and n == inside.sum()
     assert np.median(position_errors(Hk, _people())) < 0.5
+    four = dec.copy()
+    four[np.flatnonzero(four[:, 2] > 0)[4:], 2] = 0  # keep only 4 detections
+    assert homography_from_keypoints(four)[0] is None  # unverifiable: rejected by default
+    assert homography_from_keypoints(four, min_inliers=4)[0] is not None
 
 
 def test_network_shapes():

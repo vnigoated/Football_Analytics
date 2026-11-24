@@ -171,15 +171,20 @@ def decode_heatmaps(hm: np.ndarray, src_size: tuple[int, int] = (1920, 1080),
     return out
 
 
-def homography_from_keypoints(kp: np.ndarray, min_points: int = 4,
+def homography_from_keypoints(kp: np.ndarray, min_inliers: int = 5,
                               ransac_m: float = 1.0) -> tuple[np.ndarray | None, int]:
-    """Image -> pitch homography from detected keypoints (score > 0); (None, n) if too few or degenerate."""
+    """Image -> pitch homography from detected keypoints (score > 0); (None, n) if fewer than ``min_inliers``
+    keypoints agree.
+
+    Four points always fit a homography exactly, so a 4-inlier fit cannot be checked: on SN-GSR valid 86% of
+    them were wrong (A5 run 1). Requiring 5+ inliers keeps at least one point that verifies the fit.
+    """
     ok = kp[:, 2] > 0
-    if ok.sum() < min_points:
+    if ok.sum() < max(min_inliers, 4):
         return None, int(ok.sum())
     H, mask = cv2.findHomography(kp[ok, :2], KEYPOINTS_M[ok], cv2.RANSAC, ransac_m)
-    if H is None or mask.sum() < min_points:
-        return None, int(ok.sum())
+    if H is None or mask.sum() < max(min_inliers, 4):
+        return None, int(0 if mask is None else mask.sum())
     return H, int(mask.sum())
 
 

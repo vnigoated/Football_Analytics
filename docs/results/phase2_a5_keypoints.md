@@ -49,3 +49,27 @@ Median per clip is about 1 m or less except **SNGS-055 (17 m)**, followed by SNG
    frame filled from its neighbours (temporal smoothing, A6).
 3. Overfitting after epoch 8 suggests more augmentation (scale / crop) or more training frames (every 5th) could
    help further.
+
+## Which frames fail (diagnosis, same session)
+
+Frames with a homography, by number of RANSAC inliers ("bad" = median player error > 2 m):
+
+| Inliers | Frames | Bad | Median error |
+|---|---|---|---|
+| 4 | 125 | **85.6%** | 13.4 m |
+| 5 | 104 | 25.0% | 1.23 m |
+| 6 | 209 | 1.9% | 0.55 m |
+| 7 | 210 | 9.0% | 0.74 m |
+| 8 | 281 | 8.5% | 0.65 m |
+| 12–17 | 80 | 0–6.5% | 0.30–0.87 m |
+
+By spread of the detected landmarks on the pitch (standard deviation along the minor axis): 3–5 m: 49% bad;
+over 5 m: 9–11% bad.
+
+**Cause:** four points always fit a homography exactly, so a 4-inlier fit is never checked. SNGS-055 (the 17 m clip)
+shows the typical case: the camera stays in midfield, where the only landmarks are the halfway line (one straight
+line) and a few centre-circle points; the network finds them correctly, but they do not determine the view.
+
+**Fix:** require at least 5 inliers (`homography_from_keypoints(min_inliers=5)`); rejected frames get their
+homography from neighbouring frames (A6). Longer term: more landmarks on the centre circle and along the lines, so
+midfield views have enough points.
