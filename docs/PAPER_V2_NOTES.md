@@ -17,6 +17,7 @@ from chat logs or Colab sessions. Update it after each step.
 | 7 | Detection speed | 14.7 images/s on an L4 at 1120 px (batch 16, not optimised); offline use, not yet real time | same |
 | 8 | People can be tracked; identity across camera pans is the hard part | held-out HOTA 0.647 (OC-SORT + camera-motion compensation), DetA 0.74, AssA 0.57; with perfect boxes AssA only 0.79 | `docs/results/phase2_a3_tracking.md`; Drive `outputs/tracking/tracking_results.json` |
 | 9 | Teams can be found per clip from shirt colour, without training | held-out player team accuracy 0.945 (colour without lightness, per track, k = 2); a general image embedding (SigLIP) only 0.65; lightness split clips into sun / shade | `docs/results/phase2_a4_teams.md`; Drive `outputs/tracking/teams_*` |
+| 10 | Player pitch positions from broadcast frames, trained with labels derived for free from SN-GSR | median error 0.69 m, 84% within 2 m, homography in 98.8% of frames (mean 4.7 m: a few degenerate fits) | `docs/results/phase2_a5_keypoints.md`; Drive `outputs/keypoints/` |
 
 ## Still needed for the real-video section
 
