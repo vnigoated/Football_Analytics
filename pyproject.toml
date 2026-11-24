@@ -25,6 +25,7 @@ dependencies = [
 vision = [
     "torch>=2.3",
     "supervision>=0.25",
+    "trackers>=2.7",  # ByteTrack / OC-SORT and HOTA metrics (Apache-2.0); supervision 0.26+ dropped ByteTrack
     "rfdetr[train,loggers]>=1.0",  # training extras (pytorch_lightning) are optional in newer rfdetr
 ]
 # Ultralytics YOLO is AGPL-3.0: kept as a separate, opt-in extra.
