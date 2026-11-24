@@ -97,22 +97,24 @@ def upper_body(img: np.ndarray, box: tuple[float, float, float, float]) -> np.nd
     return img[max(int(y1), 0):min(r1, H), max(int(x1), 0):min(int(x2) + 1, W)]
 
 
-def colour_feature(rgb: np.ndarray, bins: int = 8) -> np.ndarray:
-    """Lab histogram of the non-grass pixels of an RGB crop: 2-D (a, b) colour + 4 lightness bins.
+def colour_feature(rgb: np.ndarray, bins: int = 8, lightness: bool = False) -> np.ndarray:
+    """Lab histogram of the non-grass pixels of an RGB crop: 2-D (a, b) colour, optionally + 4 lightness bins.
 
-    Square-rooted and L2-normalised, so Euclidean distance compares colour distributions (Hellinger).
+    Lightness is left out by default: with it, clips with sun and shade were split into a sunlit and a shaded
+    group instead of two teams (A4 run 1). Square-rooted and L2-normalised, so Euclidean distance compares
+    colour distributions (Hellinger).
     """
     import cv2
 
     if rgb.size == 0:
-        return np.zeros(bins * bins + 4, dtype=np.float32)
+        return np.zeros(bins * bins + (4 if lightness else 0), dtype=np.float32)
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV).reshape(-1, 3)
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(np.float32)
     grass = (hsv[:, 0] >= 30) & (hsv[:, 0] <= 90) & (hsv[:, 1] >= 50) & (hsv[:, 2] >= 40)
     keep = lab[~grass] if (~grass).sum() >= 10 else lab
     ab, _, _ = np.histogram2d(keep[:, 1], keep[:, 2], bins=bins, range=[[0, 256], [0, 256]])
     light, _ = np.histogram(keep[:, 0], bins=4, range=(0, 256))
-    f = np.concatenate([ab.ravel(), light.astype(float)]).astype(np.float32)
+    f = np.concatenate([ab.ravel(), light.astype(float) if lightness else []]).astype(np.float32)
     f = np.sqrt(f / max(f.sum(), 1.0))
     return f / max(np.linalg.norm(f), 1e-9)
 
@@ -138,7 +140,7 @@ def crop_features(
             else:
                 batch.append(upper_body(img, box))
     if feature == "colour":
-        return np.stack(out) if out else np.zeros((0, 68), np.float32)
+        return np.stack(out) if out else np.zeros((0, 64), np.float32)
     if embedder is None:
         raise ValueError("feature='siglip' needs an embedder")
     return embedder(batch)
