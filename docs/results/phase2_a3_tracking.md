@@ -50,6 +50,17 @@ appearance) and the jersey / role step of A6, where GS-HOTA matches people by ro
 track ID. For B1 (visible players per frame) track IDs are not needed at all: detection quality (DetA, person
 recall 0.958) is what counts.
 
-## Still to record
+## Default settings compared (tuning half, 29 clips)
 
-Section 5 table (ByteTrack / OC-SORT / SORT with default settings on the tuning half) and the detection speed line.
+| Tracker (default settings) | HOTA | DetA | AssA | IDF1 | MOTA | ID switches |
+|---|---|---|---|---|---|---|
+| ByteTrack | 0.637 | 0.747 | 0.544 | 0.730 | 0.928 | 1,122 |
+| OC-SORT (no camera-motion compensation) | 0.613 | 0.737 | 0.512 | 0.701 | 0.912 | 1,182 |
+| SORT | 0.474 | 0.668 | 0.338 | 0.480 | 0.796 | 6,482 |
+| ByteTrack on ground-truth boxes | 0.854 | 0.992 | 0.735 | 0.789 | 0.991 | 1,084 |
+
+ByteTrack's defaults (activation 0.7, high-confidence 0.6, 2 consecutive frames) scored higher on the tuning half
+(0.637) than the best of the 32 grid settings (0.633), which did not include them: the defaults are already good.
+OC-SORT is worse than ByteTrack *without* camera-motion compensation and better *with* it, so the gain comes from
+the compensation. SORT, which drops low-confidence boxes, loses identity six times as often. (Detection speed for the
+caching step was not recorded.)
