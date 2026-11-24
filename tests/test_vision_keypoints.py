@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 from pitchlens.vision.keypoints import (
+    KEYPOINT_NAMES,
     KEYPOINTS_M,
     NUM_KEYPOINTS,
     decode_heatmaps,
@@ -63,8 +64,10 @@ def test_heatmap_roundtrip_and_homography():
     Hk, n = homography_from_keypoints(dec)
     assert Hk is not None and n == inside.sum()
     assert np.median(position_errors(Hk, _people())) < 0.5
+    keep = [KEYPOINT_NAMES.index(n) for n in ("halfway_top", "circle_bottom", "left_pa_tr", "right_pa_tl")]
+    assert (dec[keep, 2] > 0).all()  # four detections, no three on one line
     four = dec.copy()
-    four[np.flatnonzero(four[:, 2] > 0)[4:], 2] = 0  # keep only 4 detections
+    four[[i for i in range(NUM_KEYPOINTS) if i not in keep], 2] = 0
     assert homography_from_keypoints(four)[0] is None  # unverifiable: rejected by default
     assert homography_from_keypoints(four, min_inliers=4)[0] is not None
 
