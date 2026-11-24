@@ -67,8 +67,16 @@ inference). This is below real time (25 fps) but enough for the offline pipeline
 different GPU at lower resolution, so the two speeds are not comparable. The paper reports speed with GPU and
 resolution.
 
-Still to record from this run: RF-DETR COCO mAP (from `metrics.csv` in the Drive run folder), number of epochs
-and training time, and the torch / rfdetr versions.
+Training: 34.8 M parameters (head re-initialised from 90 COCO classes to 2), bfloat16 mixed precision,
+multi-scale training (scale 1280 also used). Early stopping after 10 epochs (0–9), about 93 min on the L4
+(~9.3 min per epoch, 2,680 optimiser steps); best EMA checkpoint at epoch 5 (mAP@50:95 0.381), after which the
+score plateaued (0.354 at epoch 0). Final training loss 4.83 (classification 0.49, box L1 0.010, GIoU 0.21).
+Software: Python 3.13, torch 2.14.1+cu130; the rfdetr version was not printed (`rfdetr.__version__` missing, fixed in
+the notebook to use `importlib.metadata`).
+
+**RF-DETR COCO metrics (valid, last epoch, 2 classes):** mAP@50 0.687, mAP@50:95 0.380, mAP@75 0.384, mAR 0.475;
+best epoch mAP@50:95 0.381. Not directly comparable with run 1's 0.364, which averaged over 4 classes; our recall /
+precision table above is the comparable measure.
 
 Checkpoint: Drive `outputs/detector/rfdetr_medium_1120_person_ball/checkpoint_best_total.pth`. **This is the
 detector used from A3 on.**
