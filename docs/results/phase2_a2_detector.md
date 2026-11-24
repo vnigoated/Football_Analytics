@@ -42,7 +42,37 @@ labelled correctly. Ignoring roles, 94.9% of people are found at 90.3% precision
 from appearance clustering within the clip plus position. This is also how the SoccerNet GSR baselines split the
 problem.
 
-## Run 2 (planned): person + ball, 1120 px
+## Run 2 (2026-11-24): person + ball, 1120 px
 
-Same setup with `class_set="person_ball"` and resolution 1120 (to help the ball). Targets: person recall ≥ 0.95
-at precision ≥ 0.92; ball recall above 0.57.
+Same setup as run 1 with `class_set="person_ball"` (player, goalkeeper and referee merged into *person*) and
+resolution 1120 (positional encoding 70 × 70 patches), to help the ball. NVIDIA L4 (24 GB), batch 2 × gradient
+accumulation 8 (effective batch 16 as in run 1). Targets set before the run: person recall ≥ 0.95 at precision
+≥ 0.92; ball recall above 0.57. **All met.**
+
+| Class | Ground truth | Predicted | Recall | Precision | Run 1 (896 px, 4 classes merged) |
+|---|---|---|---|---|---|
+| person | 28,374 | 28,461 | **0.958** | **0.955** | 0.949 / 0.903 |
+| ball | 1,636 | 1,376 | **0.605** | **0.719** | 0.574 / 0.702 |
+
+Same valid images (1,740), same matching rule and score threshold 0.3 as run 1, so the two runs are directly
+comparable. Dropping roles mainly raised person precision (+5.2 points): run 1's extra "referee" boxes on players
+were duplicates of correct player boxes. The higher resolution gave the ball +3.1 points of recall.
+
+Sample predictions (valid): the referee in black in SNGS-059, missed in run 1, is now found; coaches and staff on
+the touchline are correctly not detected (they are not labelled in SN-GSR); a ball near the far touchline is found in
+SNGS-096.
+
+Speed: 14.7 images/s on the L4 at 1120 px (batch 16, including image loading, model not exported/optimised for
+inference). This is below real time (25 fps) but enough for the offline pipeline, and run 1's 41 images/s was on a
+different GPU at lower resolution, so the two speeds are not comparable. The paper reports speed with GPU and
+resolution.
+
+Still to record from this run: RF-DETR COCO mAP (from `metrics.csv` in the Drive run folder), number of epochs
+and training time, and the torch / rfdetr versions.
+
+Checkpoint: Drive `outputs/detector/rfdetr_medium_1120_person_ball/checkpoint_best_total.pth`. **This is the
+detector used from A3 on.**
+
+**Remaining weakness: the ball.** About 40% of labelled balls are missed per frame. A3 tracking and later
+interpolation can fill short gaps; a dedicated ball model (higher resolution crops or tiling) is an option if the
+ball turns out to matter for B1 (it does not: B1 counts players).

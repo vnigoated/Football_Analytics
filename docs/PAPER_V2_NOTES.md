@@ -11,12 +11,10 @@ from chat logs or Colab sessions. Update it after each step.
 | 1 | Real broadcasts show about as many players as the fitted camera predicts | 14.72 (train) / 14.84 (valid) visible players per frame vs 14.65 predicted | `docs/results/phase2_a1_gsr_data.md`; Drive `outputs/gsr/summary.csv`, `visible_players.png` |
 | 2 | Visibility varies strongly between broadcasts, so correction must be per clip | clip means about 9 to 20 players; frame p10 / p90 = 9 / 20 | same |
 | 3 | Labelled ball pitch positions are unreliable in the air | all off-pitch positions are ball labels; 8.6% of valid ball labels | same |
-| 4 | An off-the-shelf detector finds most people on broadcast frames | person recall 0.949, precision 0.903 (RF-DETR Medium, 896 px, run 1) | `docs/results/phase2_a2_detector.md`; Drive `outputs/detector/rfdetr_medium_896/` |
-| 5 | Role labels cannot come from a single-frame detector | referee precision 0.28: kit colours that mark referees differ per match | same |
-| 6 | Ball detection is the weak point | ball recall 0.574, precision 0.702 (centre within 10 px) | same |
-| 7 | The pipeline can run faster than real time | 41 images/s at 896 px (batch 16) | same |
-
-Run 2 (person + ball, 1120 px) is in progress; it replaces rows 4, 6 and 7 when done.
+| 4 | A fine-tuned detector finds almost all people on broadcast frames | person recall 0.958, precision 0.955 (RF-DETR Medium, person + ball, 1120 px, run 2) | `docs/results/phase2_a2_detector.md`; Drive `outputs/detector/rfdetr_medium_1120_person_ball/` |
+| 5 | Role labels cannot come from a single-frame detector | run 1 (4 classes): referee precision 0.28, kit colours that mark referees differ per match; dropping roles raised person precision 0.903 → 0.955 | same; run 1 in `outputs/detector/rfdetr_medium_896/` |
+| 6 | Ball detection is the weak point | ball recall 0.605, precision 0.719 (centre within 10 px; run 1 at 896 px: 0.574) | same |
+| 7 | Detection speed | 14.7 images/s on an L4 at 1120 px (batch 16, not optimised); offline use, not yet real time | same |
 
 ## Still needed for the real-video section
 
@@ -32,6 +30,6 @@ Run 2 (person + ball, 1120 px) is in progress; it replaces rows 4, 6 and 7 when 
   25th (valid).
 - Detector: RF-DETR Medium (Apache-2.0), COCO-pretrained; settings in `phase2_a2_detector.md`.
 - Matching rule for our metrics: IoU ≥ 0.5, ball also within 10 px centre distance; score threshold 0.3.
-- **To record in each run:** GPU type, `torch` and `rfdetr` versions (printed by the notebook's install cell).
+- Run 2: NVIDIA L4 24 GB. **To record in each run:** GPU type, `torch` and `rfdetr` versions (printed by the notebook's install cell).
 - Licences: SN-GSR images may not be published, so the paper's example figures must use our own drawings or
   permitted material, not SN-GSR frames.
