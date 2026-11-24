@@ -48,6 +48,16 @@ def test_gsr_to_coco(tmp_path):
     assert ref["bbox"] == [0.0, 100.0, 10.0, 80.0]  # clipped at the left edge
 
 
+def test_gsr_to_coco_person_ball(tmp_path):
+    _sequence(tmp_path / "valid")
+    out = tmp_path / "coco_pb"
+    stats = gsr_to_coco(tmp_path / "valid", out, every=10, link=False, class_set="person_ball")
+    assert stats == {"images": 2, "annotations": 6, "person": 4, "ball": 2}
+    coco = json.loads((out / ANNOTATION_FILE).read_text())
+    assert [c["name"] for c in coco["categories"]] == ["person", "ball"]
+    assert {a["category_id"] for a in coco["annotations"]} == {1, 2}
+
+
 def test_clip_box_outside():
     assert clip_box(1930, 10, 20, 20, 1920, 1080) is None
 

@@ -20,8 +20,10 @@ Tracking data derived from broadcast video is cheap and widely available, but th
 
 ## Categories
 
-- Primary: **stat.AP** (Statistics – Applications)
-- Cross-list: **cs.CV** (Computer Vision and Pattern Recognition), **cs.LG** (Machine Learning)
+- Archive: **Computer Science (cs)**
+- Primary: **cs.CV** (Computer Vision and Pattern Recognition); the endorsement must be for cs.CV
+- Cross-list: **stat.AP** (Statistics – Applications). Optional: cs.LG (Machine Learning)
+- Cross-lists need no extra endorsement; moderators may move or drop one, which is normal.
 
 ## Licence
 
@@ -32,6 +34,6 @@ workshop or journal under the publisher's own licence.
 
 - [ ] Repository is public (the paper links to it).
 - [ ] arXiv account uses your real name; affiliation Vishwakarma University.
-- [ ] If arXiv asks for an **endorsement** for stat.AP, request one from someone who has published there
-      (e.g. a supervisor), or submit with cs.CV as primary if you already have an endorsement there.
+- [ ] **Endorsement for cs.CV**: the endorser must be able to endorse in cs.CV (arXiv shows this on the
+      endorsement page). Send them the endorsement code arXiv gives you.
 - [ ] Check the generated PDF preview on arXiv carefully (tables, figures, references) before confirming.

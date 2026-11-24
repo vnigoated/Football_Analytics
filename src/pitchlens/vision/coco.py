@@ -21,6 +21,21 @@ CLASSES: tuple[str, ...] = ("player", "goalkeeper", "referee", "ball")
 CATEGORY_IDS: dict[str, int] = {name: i + 1 for i, name in enumerate(CLASSES)}
 ANNOTATION_FILE = "_annotations.coco.json"
 
+# How GSR roles map to detector classes.
+# "roles": one class per role (run 1). Referees were confused with teams wearing a
+#   referee-like kit (yellow), because the kit colour that marks a referee differs per match.
+# "person_ball": one person class + ball (run 2); roles are decided per clip later (A4).
+CLASS_SETS: dict[str, dict[str, str]] = {
+    "roles": {r: r for r in CLASSES},
+    "person_ball": {"player": "person", "goalkeeper": "person", "referee": "person", "ball": "ball"},
+}
+
+
+def category_ids(class_set: str = "roles") -> dict[str, int]:
+    """Detector class name -> COCO category id (1-based, in first-seen order)."""
+    names = list(dict.fromkeys(CLASS_SETS[class_set].values()))
+    return {n: i + 1 for i, n in enumerate(names)}
+
 
 def _place(src: Path, dst: Path, link: bool) -> None:
     if dst.exists() or dst.is_symlink():
@@ -51,18 +66,21 @@ def gsr_to_coco(
     every: int = 10,
     link: bool = True,
     copy_images: bool = True,
+    class_set: str = "roles",
 ) -> dict[str, int]:
     """Write a COCO dataset for one SN-GSR split. Returns counts per class and totals."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    role_to_class = CLASS_SETS[class_set]
+    cat_ids = category_ids(class_set)
     images, annotations = [], []
-    counts = dict.fromkeys(CLASSES, 0)
+    counts = dict.fromkeys(cat_ids, 0)
     for seq_dir in find_sequences(split_root):
         imgs, objs = load_sequence(seq_dir)
         imgs = imgs.filter(((imgs["frame"] - 1) % every) == 0)
         by_image = {}
         for o in objs.iter_rows(named=True):
-            if o["role"] in CATEGORY_IDS and o["x"] is not None:
+            if o["role"] in role_to_class and o["x"] is not None:
                 by_image.setdefault(o["image_id"], []).append(o)
         for im in imgs.iter_rows(named=True):
             width, height = im["width"] or 1920, im["height"] or 1080
@@ -76,23 +94,25 @@ def gsr_to_coco(
                 box = clip_box(o["x"], o["y"], o["w"], o["h"], width, height)
                 if box is None:
                     continue
+                cls = role_to_class[o["role"]]
                 annotations.append(
                     {
                         "id": len(annotations) + 1,
                         "image_id": img_id,
-                        "category_id": CATEGORY_IDS[o["role"]],
+                        "category_id": cat_ids[cls],
                         "bbox": [round(v, 2) for v in box],
                         "area": round(box[2] * box[3], 2),
                         "iscrowd": 0,
                     }
                 )
-                counts[o["role"]] += 1
+                counts[cls] += 1
+    desc = f"SoccerNet-GSR {Path(split_root).name}, every {every}th frame, classes {class_set}"
     coco = {
-        "info": {"description": f"SoccerNet-GSR {Path(split_root).name}, every {every}th frame"},
+        "info": {"description": desc},
         "images": images,
         "annotations": annotations,
         "categories": [
-            {"id": i, "name": n, "supercategory": "object"} for n, i in CATEGORY_IDS.items()
+            {"id": i, "name": n, "supercategory": "object"} for n, i in cat_ids.items()
         ],
     }
     (out / ANNOTATION_FILE).write_text(json.dumps(coco), encoding="utf-8")
