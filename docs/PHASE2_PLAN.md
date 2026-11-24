@@ -35,7 +35,7 @@ cannot measure the pressing bias directly. Instead:
 |---|---|---|---|
 | A1 | Download SN-GSR train + valid to Colab; notebook that draws labels on frames and prints statistics (clips, frames, players and **visible players per frame**) | `colab/01_gsr_data.ipynb` | Data understood; label format documented |
 | A2 | Fine-tune **RF-DETR** (Apache-2.0) for player, goalkeeper, referee, ball | checkpoint on Drive, `pitchlens.vision.detector` | mAP@50 on valid; ball recall reported separately |
-| A3 | **Tracking** with ByteTrack (`supervision`), tuned on valid | `pitchlens.vision.tracker` | HOTA / IDF1 on valid |
+| A3 | **Tracking** with ByteTrack (`trackers`, Apache-2.0; OC-SORT and SORT compared), tuned on half of valid, reported on the other half | `pitchlens.vision.tracker` | HOTA / IDF1 on valid |
 | A4 | **Team assignment**: SigLIP embeddings → UMAP → k-means per clip; goalkeepers by position | `pitchlens.vision.teams` | Team accuracy on valid |
 | A5 | **Pitch keypoints → homography**: 32-keypoint model, RANSAC homography (already in `pitchlens.geometry`), temporal smoothing | `pitchlens.vision.keypoints` | Reprojection error (m); share of frames with a valid homography |
 | A6 | **End-to-end** run on SN-GSR valid and test | `pitchlens video` command, results table | **GS-HOTA**, compared with published baselines and Choi (2026), who reports 35.2 on 11 test sequences |
