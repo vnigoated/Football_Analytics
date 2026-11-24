@@ -6,6 +6,7 @@ from pitchlens.vision.teams import (
     colour_feature,
     evaluate_teams,
     kmeans,
+    match_tracks_to_gt,
     sample_crops,
     shirt_region,
     summarise,
@@ -74,3 +75,11 @@ def test_evaluate_teams_maps_clusters():
     assert c["player_correct"] == 2 and c["referee_other"] == 1 and c["keeper_other"] == 0
     s = summarise([c])
     assert s["player_team_accuracy"] == 1.0 and s["referee_as_other"] == 1.0
+
+
+def test_match_tracks_to_gt():
+    box = {"x1": [0.0, 100.0], "y1": [0.0, 0.0], "x2": [10.0, 110.0], "y2": [20.0, 20.0]}
+    tracks = pl.DataFrame({"frame": [1, 1], "id": [7, 8], **box})
+    gt = pl.DataFrame({"frame": [1, 1], "id": [21, 20], **{k: v[::-1] for k, v in box.items()}})
+    m = match_tracks_to_gt(tracks, gt).sort("track_id")
+    assert m["gt_id"].to_list() == [20, 21]

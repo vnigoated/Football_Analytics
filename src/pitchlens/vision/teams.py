@@ -239,10 +239,11 @@ def match_tracks_to_gt(tracks: pl.DataFrame, gt: pl.DataFrame, iou_thr: float = 
         if g is None:
             continue
         iou = box_iou(p.select("x1", "y1", "x2", "y2").to_numpy(), g.select("x1", "y1", "x2", "y2").to_numpy())
+        pid, gid = p["id"].to_numpy(), g["id"].to_numpy()
         r, c = linear_sum_assignment(-iou)
         for i, j in zip(r, c, strict=True):
             if iou[i, j] >= iou_thr:
-                rows.append({"frame": frame, "track_id": int(p["id"][i]), "gt_id": int(g["id"][j])})
+                rows.append({"frame": int(frame), "track_id": int(pid[i]), "gt_id": int(gid[j])})
     return pl.DataFrame(rows, schema={"frame": pl.Int64, "track_id": pl.Int64, "gt_id": pl.Int64})
 
 
