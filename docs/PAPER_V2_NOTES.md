@@ -30,6 +30,6 @@ from chat logs or Colab sessions. Update it after each step.
   25th (valid).
 - Detector: RF-DETR Medium (Apache-2.0), COCO-pretrained; settings in `phase2_a2_detector.md`.
 - Matching rule for our metrics: IoU ≥ 0.5, ball also within 10 px centre distance; score threshold 0.3.
-- Run 2: NVIDIA L4 24 GB, Python 3.13, torch 2.14.1+cu130, 10 epochs in ~93 min. **To record in each run:** GPU type, `torch` and `rfdetr` versions (printed by the notebook's install cell).
+- Run 2: NVIDIA L4 24 GB, Python 3.13, torch 2.14.1+cu130, rfdetr 1.12.1, 10 epochs in ~93 min. **To record in each run:** GPU type, `torch` and `rfdetr` versions (printed by the notebook's install cell).
 - Licences: SN-GSR images may not be published, so the paper's example figures must use our own drawings or
   permitted material, not SN-GSR frames.
