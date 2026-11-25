@@ -139,7 +139,7 @@ def _per_camera() -> pl.DataFrame:
         for f in Path("configs/cameras/stadiums").glob("*.json")
     }
     parts = []
-    for d, name in (("idsse", "IDSSE (7 matches)"), ("metrica", "Metrica (2 matches)")):
+    for d, name in (("idsse", "IDSSE (7 matches)"), ("metrica", "Metrica (3 matches)")):
         t = pl.read_csv(f"outputs/stadiums/{d}/stadium_per_camera.csv")
         parts.append(t.with_columns(pl.lit(name).alias("data"),
                                     pl.col("camera").replace_strict(lag).alias("lag_s")))  # fmt: skip
@@ -172,7 +172,7 @@ def figure_visibility(t: pl.DataFrame) -> None:
 def figure_lag(t: pl.DataFrame) -> None:
     """Fig. 3: bias in pressure on the ball carrier vs. fitted camera lag."""
     fig, ax = plt.subplots(figsize=(3.4, 2.5))
-    offsets = {"IDSSE (7 matches)": -0.012, "Metrica (2 matches)": 0.012}
+    offsets = {"IDSSE (7 matches)": -0.012, "Metrica (3 matches)": 0.012}
     for (name,), part in t.group_by("data", maintain_order=True):
         color, marker = (BLUE, "o") if name.startswith("IDSSE") else (ORANGE, "s")
         rng = np.random.default_rng(0)
