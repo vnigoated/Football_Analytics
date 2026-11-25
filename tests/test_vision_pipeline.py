@@ -12,8 +12,10 @@ from pitchlens.vision.pipeline import (
     gs_hota,
     id_sim,
     loc_sim,
+    normalise_attributes,
     oracle_attributes,
     to_pitch,
+    write_predictions,
 )
 
 pytest.importorskip("trackers")
@@ -36,12 +38,36 @@ def test_loc_sim_tolerance():
     assert s[0, 3] < 1e-4
 
 
-def test_id_sim_ignores_attributes_missing_in_ground_truth():
-    gt = gs_rows([{"role": "player", "team": "left", "jersey": "10"}, {"role": "referee"}])
-    pr = gs_rows([{"role": "player", "team": "left"}, {"role": "referee", "team": "right"}])
+def test_id_sim_official_rules():
+    gt = normalise_attributes(gs_rows([{"role": "player", "team": "left", "jersey": "10"}, {"role": "referee"},
+                                       {"role": "player", "team": "left"}, {"role": "goalkeeper", "team": "left",
+                                                                            "jersey": "1"}]))
+    pr = normalise_attributes(gs_rows([{"role": "player", "team": "left"}, {"role": "referee", "team": "right"},
+                                       {"role": "player", "team": "left", "jersey": "10"},
+                                       {"role": "goalkeeper", "team": "left"}]))
     s = id_sim(gt, pr, ("role", "team"))
-    assert s.tolist() == [[1, 0], [0, 1]]  # the referee's team is not checked
-    assert id_sim(gt, pr, ("role", "team", "jersey"))[0, 0] == 0  # number in the labels, none predicted
+    assert s[1, 1] == 1  # a referee's team is dropped on both sides
+    full = id_sim(gt, pr, ("role", "team", "jersey"))
+    assert full[0, 0] == 0  # number in the labels, none predicted
+    assert full[2, 0] == 1  # no number in the labels, none predicted
+    assert full[2, 2] == 0  # no number in the labels, one predicted
+    assert full[3, 3] == 1  # goalkeepers' numbers are not scored
+
+
+def test_write_predictions_format(tmp_path):
+    import json
+
+    images = pl.DataFrame({"frame": [1, 2], "image_id": ["1021000001", "1021000002"]})
+    pred = gs_rows([{"frame": 2, "id": 5, "x1": 1.0, "y1": 2.0, "x2": 11.0, "y2": 32.0, "pitch_x": 3.5,
+                     "pitch_y": -1.0, "role": "player", "team": "left", "jersey": "9"},
+                    {"frame": 1, "id": 6, "x1": 1.0, "y1": 2.0, "x2": 11.0, "y2": 32.0, "role": "referee"}])
+    write_predictions(pred, images, tmp_path / "SNGS-021.json")
+    d = json.loads((tmp_path / "SNGS-021.json").read_text())["predictions"]
+    assert len(d) == 1  # no pitch position -> not exported
+    p = d[0]
+    assert p["image_id"] == "1021000002" and p["track_id"] == 5 and p["supercategory"] == "object"
+    assert p["attributes"] == {"role": "player", "team": "left", "jersey": "9"}
+    assert p["bbox_pitch"]["x_bottom_middle"] == 3.5 and "y_bottom_left" in p["bbox_pitch"]
 
 
 def test_gs_hota_perfect_and_wrong_team():
