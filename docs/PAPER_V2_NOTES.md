@@ -49,4 +49,4 @@ from chat logs or Colab sessions. Update it after each step.
 
 ## Draft status
 
-- 2026-11-25: real-video section drafted in `paper/main.tex` (Section 5, Table 4, Fig. 4) from rows 1-20 (branch `paper/v2-real-video`).
+- 2026-11-25: real-video section drafted in `paper/main.tex` (Section 6, Table 3, Fig. 4) from rows 1-20 (branch `paper/v2-real-video`).

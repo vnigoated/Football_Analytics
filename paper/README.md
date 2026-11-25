@@ -31,7 +31,7 @@ python paper/make_figures.py
 
 ## Version 2: real-video section (2026-11-25)
 
-- New Section 5, "From Real Broadcast Video": the pipeline and its official SoccerNet-GSR result (Table 4),
+- New Section 6, "From Real Broadcast Video": the pipeline and its official SoccerNet-GSR result (Table 3),
   counting visible players (B1), the correction with the video count (B2, Fig. 4), and the main-camera filter (B3).
   Every number comes from `docs/results/phase2_*.md`.
 - The abstract, introduction (question 4, contribution iv), data, discussion, limitations and conclusion are updated.
