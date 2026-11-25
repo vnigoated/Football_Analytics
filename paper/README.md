@@ -28,3 +28,15 @@ python paper/make_figures.py
 - [x] Novelty search: no published work measures pressing on broadcast data (2026-11-22).
 - [x] Metrica equal-visibility comparison with the fitted cameras.
 - [x] Bias correction, strict leave-stadium-and-match-out evaluation (`pitchlens bias-correction`).
+
+## Version 2: real-video section (2026-11-25)
+
+- New Section 6, "From Real Broadcast Video": the pipeline and its official SoccerNet-GSR result (Table 3),
+  counting visible players (B1), the correction with the video count (B2, Fig. 4), and the main-camera filter (B3).
+  Every number comes from `docs/results/phase2_*.md`.
+- The abstract, introduction (question 4, contribution iv), data, discussion, limitations and conclusion are updated.
+  Six new references were checked against arXiv and Crossref.
+- Fig. 4: `python paper/make_figures.py real-video`. It needs `outputs/b1_visible/counts_tracks.parquet` (from Drive)
+  and `outputs/correction/correction_per_broadcast.csv`.
+- [ ] Compile on Overleaf and check the page count against the venue's limit (the paper is now longer).
+- [ ] Before an arXiv replacement (v2), make sure v1 has been announced.
