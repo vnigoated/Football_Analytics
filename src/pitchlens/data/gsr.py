@@ -5,7 +5,7 @@ Each sequence folder (e.g. ``valid/SNGS-021``) holds ``img1/*.jpg`` (30-s clip, 
 Object annotations (``supercategory == "object"``) carry a ``track_id``, ``attributes``
 (``role``: player / goalkeeper / referee / ball / other, ``team``: left / right, ``jersey``),
 an image box ``bbox_image`` and, when known, the pitch position of the box's bottom middle
-``bbox_pitch`` in metres (origin at the pitch centre).
+``bbox_pitch`` in metres (origin at the pitch centre; ``bbox_pitch_raw`` is kept too).
 
 The parser is lenient: missing fields become nulls, so a format change shows up as nulls in
 the statistics rather than a crash.
@@ -68,6 +68,7 @@ def parse_labels(data: dict, sequence: str = "") -> tuple[pl.DataFrame, pl.DataF
         att = a.get("attributes") or {}
         box = a.get("bbox_image") or {}
         pitch = a.get("bbox_pitch") or {}
+        raw = a.get("bbox_pitch_raw") or {}
         obj_rows.append(
             {
                 "sequence": sequence,
@@ -82,6 +83,8 @@ def parse_labels(data: dict, sequence: str = "") -> tuple[pl.DataFrame, pl.DataF
                 "h": _num(box, "h"),
                 "pitch_x": _num(pitch, "x_bottom_middle"),
                 "pitch_y": _num(pitch, "y_bottom_middle"),
+                "pitch_raw_x": _num(raw, "x_bottom_middle"),
+                "pitch_raw_y": _num(raw, "y_bottom_middle"),
             }
         )
     img_schema = {
@@ -102,7 +105,7 @@ def parse_labels(data: dict, sequence: str = "") -> tuple[pl.DataFrame, pl.DataF
         "role": pl.String,
         "team": pl.String,
         "jersey": pl.String,
-        **{k: pl.Float64 for k in ("x", "y", "w", "h", "pitch_x", "pitch_y")},
+        **{k: pl.Float64 for k in ("x", "y", "w", "h", "pitch_x", "pitch_y", "pitch_raw_x", "pitch_raw_y")},
     }
     return (
         pl.DataFrame(img_rows, schema=img_schema),
