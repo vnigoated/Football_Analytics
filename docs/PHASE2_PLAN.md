@@ -45,7 +45,7 @@ cannot measure the pressing bias directly. Instead:
 
 | # | Task | Output |
 |---|---|---|
-| B1 | Visible players per frame from the pipeline vs. ground truth: bias, error, how it depends on zoom and replays | table + figure |
+| B1 | Visible players per frame from the pipeline vs. ground truth: bias, error, how it depends on zoom and replays | table + figure; `pitchlens.analytics.visible_count`, `colab/08_visible_players.ipynb`. **Run 1: bias -0.7 to -1.1 players raw, -0.32 / +0.09 after calibration (held-out / test)** |
 | B2 | Propagate that error into the correction (Phase 1 `bias-correction`): corrected-error interval for real use | updated correction result |
 | B3 | Replay / close-up detection (frames where the homography fails or the view is not the main camera) and their effect | filter + share of frames removed |
 | B4 | Demo: pressing and corrected pressing on real broadcast clips | figure for the paper |
