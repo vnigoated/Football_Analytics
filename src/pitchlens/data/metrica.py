@@ -25,10 +25,15 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-METRICA_MATCH_IDS = ("metrica-1", "metrica-2")
+METRICA_MATCH_IDS = ("metrica-1", "metrica-2", "metrica-3")
 _EVENTS_URL = (
     "https://raw.githubusercontent.com/metrica-sports/sample-data/master/data/"
     "Sample_Game_{n}/Sample_Game_{n}_RawEventsData.csv"
+)
+# Game 3 is in the newer format: FIFA EPTS tracking (read by kloppy) and events as JSON.
+_EVENTS_JSON_URL = (
+    "https://raw.githubusercontent.com/metrica-sports/sample-data/master/data/"
+    "Sample_Game_{n}/Sample_Game_{n}_events.json"
 )
 OWNER_TYPES = ("PASS", "RECOVERY", "SHOT", "SET PIECE", "BALL LOST")
 
@@ -39,15 +44,40 @@ def _game_number(match_id: str) -> int:
     return int(match_id.split("-")[1])
 
 
-def load_metrica_events(match_id: str, cache_dir: str | Path = "data/metrica") -> pl.DataFrame:
-    """Download (once) and read the raw event CSV of a Metrica sample game."""
-    n = _game_number(match_id)
-    path = Path(cache_dir) / f"Sample_Game_{n}_RawEventsData.csv"
-    if not path.exists():
-        import urllib.request
+def events_from_json(data: dict) -> pl.DataFrame:
+    """Metrica's JSON events (game 3) as the columns of the raw event CSV (games 1-2): ``Team`` (team id), ``Type``,
+    ``Subtype`` (subtype names joined with "-"), ``Period``, ``Start Frame``, ``End Frame``."""
+    rows = []
+    for e in data["data"]:
+        subs = e.get("subtypes") or []
+        subs = subs if isinstance(subs, list) else [subs]
+        end = (e.get("end") or {}).get("frame")
+        rows.append({
+            "Team": (e.get("team") or {}).get("id"),
+            "Type": (e.get("type") or {}).get("name"),
+            "Subtype": "-".join(s["name"] for s in subs if s and s.get("name")) or None,
+            "Period": e.get("period"),
+            "Start Frame": e["start"]["frame"],
+            "End Frame": end if end is not None else e["start"]["frame"],
+        })
+    schema = {"Team": pl.String, "Type": pl.String, "Subtype": pl.String, "Period": pl.Int64,
+              "Start Frame": pl.Int64, "End Frame": pl.Int64}
+    return pl.DataFrame(rows, schema=schema)
 
+
+def load_metrica_events(match_id: str, cache_dir: str | Path = "data/metrica") -> pl.DataFrame:
+    """Download (once) and read the events of a Metrica sample game (CSV for games 1-2, JSON for game 3)."""
+    import json
+    import urllib.request
+
+    n = _game_number(match_id)
+    as_json = n >= 3
+    path = Path(cache_dir) / (f"Sample_Game_{n}_events.json" if as_json else f"Sample_Game_{n}_RawEventsData.csv")
+    if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(_EVENTS_URL.format(n=n), path)
+        urllib.request.urlretrieve((_EVENTS_JSON_URL if as_json else _EVENTS_URL).format(n=n), path)
+    if as_json:
+        return events_from_json(json.loads(path.read_text(encoding="utf-8")))
     return pl.read_csv(path)
 
 
@@ -107,7 +137,7 @@ def load_metrica_tracking(match_id: str = "metrica-1", limit: int | None = None)
     owner, alive = possession_from_events(
         load_metrica_events(match_id), np.array([f.frame_id for f in ds.frames])
     )
-    team_by_id = {t.team_id: t for t in ds.metadata.teams}
+    team_by_id = {t.team_id.lower(): t for t in ds.metadata.teams}  # "home" / "away" (1-2), "fifatma" (3)
     for frame, team, is_alive in zip(ds.frames, owner, alive):
         frame.ball_owning_team = team_by_id.get(team) if team else None
         frame.ball_state = BallState.ALIVE if is_alive else BallState.DEAD

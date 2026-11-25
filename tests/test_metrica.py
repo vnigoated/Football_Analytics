@@ -33,3 +33,28 @@ def test_possession_and_dead_ball():
     assert at[60][1] is False  # goal (55) until kick-off (70)
     assert at[75] == ("home", True)
     assert at[85][1] is False  # after the last event
+
+
+def test_events_from_json_game3_format():
+    from pitchlens.data.metrica import events_from_json, possession_from_events
+
+    data = {"data": [
+        {"team": {"id": "FIFATMA"}, "type": {"name": "SET PIECE"}, "subtypes": {"name": "KICK OFF"},
+         "start": {"frame": 10}, "end": {"frame": 10}, "period": 1},
+        {"team": {"id": "FIFATMA"}, "type": {"name": "PASS"}, "subtypes": None,
+         "start": {"frame": 20}, "end": {"frame": 30}, "period": 1},
+        {"team": {"id": "FIFATMB"}, "type": {"name": "SHOT"},
+         "subtypes": [{"name": "OFF TARGET"}, {"name": "OUT"}], "start": {"frame": 50}, "end": {"frame": 60},
+         "period": 1},
+        {"team": {"id": "FIFATMA"}, "type": {"name": "SET PIECE"}, "subtypes": {"name": "GOAL KICK"},
+         "start": {"frame": 80}, "end": {"frame": None}, "period": 1},
+    ]}
+    ev = events_from_json(data)
+    assert ev.columns == ["Team", "Type", "Subtype", "Period", "Start Frame", "End Frame"]
+    assert ev["Subtype"].to_list() == ["KICK OFF", None, "OFF TARGET-OUT", "GOAL KICK"]
+    assert ev["End Frame"].to_list() == [10, 30, 60, 80]
+    import numpy as np
+
+    owner, alive = possession_from_events(ev, np.arange(10, 90))
+    assert owner[25 - 10] == "fifatma" and owner[55 - 10] == "fifatmb"
+    assert not alive[70 - 10] and alive[80 - 10]  # dead after the shot goes out, alive again at the goal kick
