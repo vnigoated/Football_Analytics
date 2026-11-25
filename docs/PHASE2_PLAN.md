@@ -47,7 +47,7 @@ cannot measure the pressing bias directly. Instead:
 |---|---|---|
 | B1 | Visible players per frame from the pipeline vs. ground truth: bias, error, how it depends on zoom and replays | table + figure; `pitchlens.analytics.visible_count`, `colab/08_visible_players.ipynb`. **Run 1: bias -0.7 to -1.1 players raw, -0.32 / +0.09 after calibration (held-out / test)** |
 | B2 | Propagate that error into the correction (Phase 1 `bias-correction`): corrected-error interval for real use | updated correction result; `pitchlens count-error-propagation`, `colab/09_count_error_propagation.ipynb`. **Run 1: calibrated video count, whole match: MAE 3.09% (true count 3.05%), p95 7.27%** |
-| B3 | Replay / close-up detection (frames where the homography fails or the view is not the main camera) and their effect | filter + share of frames removed |
+| B3 | Replay / close-up detection (frames where the homography fails or the view is not the main camera) and their effect | filter + share of frames removed; `pitchlens.vision.shots`, `colab/10_main_camera_filter.ipynb` (SN-GSR is main camera only: measures false removals) |
 | B4 | Demo: pressing and corrected pressing on real broadcast clips | figure for the paper |
 | B5 | **Paper v2**: add the real-video section; submit to CVsports 2027 (if the deadline fits, ~March) or MLSA 2027 (~June) | updated `paper/` |
 
