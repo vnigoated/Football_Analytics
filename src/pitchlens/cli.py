@@ -340,6 +340,27 @@ def _cmd_bias_correction(args: argparse.Namespace) -> None:
     print(f"Saved -> {out}")
 
 
+def _cmd_video(args: argparse.Namespace) -> None:
+    """Broadcast clip -> per-frame pitch positions, roles and teams (CSV)."""
+    import tempfile
+    from pathlib import Path
+
+    from rfdetr import RFDETRMedium
+
+    from pitchlens.vision.keypoints import load_model
+    from pitchlens.vision.pipeline import run_video, video_to_frames
+
+    src = Path(args.input)
+    with tempfile.TemporaryDirectory() as tmp:
+        clip = src if src.is_dir() else video_to_frames(src, tmp)
+        det = RFDETRMedium(pretrain_weights=args.detector, resolution=args.resolution, num_classes=2)
+        kp = load_model(args.keypoints, args.device)
+        gs = run_video(clip, det, kp, device=args.device)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    gs.write_csv(args.out)
+    print(f"{gs.height} rows, {gs['id'].n_unique()} tracks -> {args.out}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="pitchlens", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -410,6 +431,15 @@ def main(argv: list[str] | None = None) -> None:
     fc.add_argument("--per-match", action="store_true",
                     help="Fit one camera per match (stadium) instead of one shared camera")
     fc.set_defaults(func=_cmd_fit_camera)
+
+    vd = sub.add_parser("video", help="Broadcast clip -> pitch positions, roles and teams per frame")
+    vd.add_argument("input", help="Video file, or a folder with img1/000001.jpg, ...")
+    vd.add_argument("--detector", required=True, help="RF-DETR checkpoint (A2)")
+    vd.add_argument("--keypoints", required=True, help="Pitch keypoint network best.pt (A5)")
+    vd.add_argument("--resolution", type=int, default=1120)
+    vd.add_argument("--device", default="cuda")
+    vd.add_argument("--out", default="outputs/video/game_state.csv")
+    vd.set_defaults(func=_cmd_video)
 
     args = p.parse_args(argv)
     args.func(args)
