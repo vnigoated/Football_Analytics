@@ -159,5 +159,22 @@ resolution, letterboxed to 128 × 32.
 | PARSeq pretrained | 27.56 | 26.47 | 26.28 |
 | **PARSeq fine-tuned** | **35.96** | **35.46** | **34.83** |
 
-Official evaluator: the COMBINED rows are in Drive `outputs/jersey/official_{valid,test}_pitchlens_a7r2.txt`. The
-run printed only the first clip's row; the notebook now prints the COMBINED row.
+**Official SoccerNet evaluator** (sn-trackeval, all clips of each split, fine-tuned PARSeq):
+
+| | GS-HOTA | DetA | AssA | LocA |
+|---|---|---|---|---|
+| valid | **36.09** | 20.38 | 63.91 | 92.58 |
+| **test** | **35.54** | 20.97 | 60.25 | 92.76 |
+
+Our implementation is again within 0.7 points (test 34.83 against 35.54).
+
+**Official test GS-HOTA by step:**
+
+| Step | Official test GS-HOTA |
+|---|---|
+| SoccerNet baseline | 22.26 |
+| A6, no numbers | 24.00 |
+| A7 run 1, ResNet reader | 30.52 |
+| **A7 run 2, PARSeq fine-tuned** | **35.54** |
+
+Choi (2026) reports 35.2, but on 11 test clips only.

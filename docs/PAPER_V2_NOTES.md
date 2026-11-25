@@ -23,6 +23,7 @@ from chat logs or Colab sessions. Update it after each step.
 | 13 | Visible-player count from real video (B1 preview) | 13.52 vs 14.85 labelled per frame (−1.33), within ±1 in 70.6% of frames | same; `visible_players_held_out.csv` |
 | 14 | Official SoccerNet evaluator: full pipeline with jersey numbers | **test GS-HOTA 30.52** (DetA 15.89, AssA 58.65; baseline 22.26), valid 28.30; without numbers 24.00 test; our implementation agrees within 0.6 points | `docs/results/phase2_a7_jersey.md`; Drive `outputs/jersey/official_*.txt` |
 | 15 | Jersey numbers are the bottleneck | with labelled numbers on our tracks 52.15 (test) / 59.79 (valid held-out); own reader reads 17-21% of numbered tracks (41 numbers in train -> overfits) | same |
+| 16 | Jersey numbers with a pretrained text recogniser fine-tuned on 1,507 crops | **official test GS-HOTA 35.54** (valid 36.09; DetA 20.97, AssA 60.25); reads 32% of numbered tracks vs 20% (run 1), wrong numbers 19% vs 62% | `docs/results/phase2_a7_jersey.md` run 2; Drive `outputs/jersey/official_*_pitchlens_a7r2.txt` |
 
 ## Still needed for the real-video section
 
