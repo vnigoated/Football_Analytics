@@ -178,3 +178,54 @@ Our implementation is again within 0.7 points (test 34.83 against 35.54).
 | **A7 run 2, PARSeq fine-tuned** | **35.54** |
 
 Choi (2026) reports 35.2, but on 11 test clips only.
+
+## Run 3 (2026-11-25, Colab A100): one self-training round
+
+**What changed.** The round-1 reader (run 2's fine-tuned PARSeq) re-read all 101,169 train number crops. It sees a
+number in **6,296 crops (6.2%, up from 1,507)**, and in 75.8% of those it reads the track's true number. PARSeq
+was fine-tuned again from the pretrained weights on those 6,296 crops, labelled with the true numbers: 3 epochs,
+loss 0.76 → 0.25.
+
+**Reader alone** (564 labelled player tracks, valid held-out half, at least 2 crops):
+
+| Reader | min_conf | Track right | Numbered tracks read right | Wrong number given |
+|---|---|---|---|---|
+| Round 1 (run 2) | 0.3 | 0.404 | 0.319 | 0.186 |
+| **Round 2** | 0.3 | 0.562 | **0.550** | 0.270 |
+| **Round 2** | 0.5 | **0.592** | 0.529 | 0.101 |
+| Round 2 | 0.7 | 0.566 | 0.494 | 0.050 |
+
+**Vote** (tuning half): round 2 is best at `min_conf = 0.7`, `min_votes = 1`, with GS-HOTA **40.61** (round 1:
+34.92).
+
+**GS-HOTA (our implementation, official rules):**
+
+| Reader | Valid held-out half | All valid | Test |
+|---|---|---|---|
+| ResNet-34 (run 1) | 28.16 | 27.89 | 29.92 |
+| PARSeq pretrained | 27.56 | 26.47 | 26.28 |
+| PARSeq round 1 (run 2) | 35.96 | 35.46 | 34.83 |
+| **PARSeq round 2 (run 3)** | **41.17** | **40.90** | **38.95** |
+
+**Official SoccerNet evaluator** (sn-trackeval, all clips):
+
+| | GS-HOTA | DetA | AssA | LocA |
+|---|---|---|---|---|
+| valid | **41.63** | 27.25 | 63.61 | 92.74 |
+| **test** | **39.77** | 26.47 | 59.76 | 92.84 |
+
+**Official test GS-HOTA by step:**
+
+| Step | Official test GS-HOTA |
+|---|---|
+| SoccerNet baseline | 22.26 |
+| No numbers (A6) | 24.00 |
+| ResNet reader | 30.52 |
+| PARSeq round 1 | 35.54 |
+| **PARSeq round 2** | **39.77** |
+
+The result is above Choi (2026), who reports 35.2 on 11 test clips only. The 2024 challenge winner reached 63.81.
+
+**Finding.** Self-training quadrupled the usable training crops and lifted numbered-track reading from 32% to 55%.
+Nothing new is labelled by hand: the labels are the track numbers SN-GSR already has, and the reader only decides
+which crops show the number. The held-out half and test are never used for training.
