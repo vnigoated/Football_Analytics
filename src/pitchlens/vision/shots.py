@@ -68,13 +68,19 @@ def person_size(tracks: pl.DataFrame) -> pl.DataFrame:
             .agg(pl.col("h").median().alias("box_height"), pl.len().alias("people")))
 
 
-def main_view(features: pl.DataFrame, grass_min: float = 0.3, box_max: float = 250.0, cut_min: float = 0.5,
+def main_view(features: pl.DataFrame, grass_min: float = 0.2, box_max: float = 300.0, cut_min: float = 0.5,
               shot_vote: bool = True) -> pl.DataFrame:
     """Add ``shot`` (a new shot starts where ``cut >= cut_min``) and ``main`` (True = keep).
 
     A frame looks like the main camera if its grass share is at least ``grass_min`` and the median tracked person is
     at most ``box_max`` px tall (frames without people pass the size test). With ``shot_vote`` a whole shot takes
     the majority decision of its frames.
+
+    Defaults from B3 run 1 (SN-GSR, main camera only):
+    - Grass share is at least 0.21 in 99% of frames, but a sunny stadium with hard shadows and pale turf falls to
+      0.2–0.3. A threshold of 0.3 wrongly dropped 2 of 107 clips; 0.2 drops none.
+    - The median player is at most 255 px tall.
+    - Consecutive frames never differ by more than 0.16, and a cut starts at 0.5.
     """
     f = features.sort("frame").with_columns(
         shot=(pl.col("cut") >= cut_min).cum_sum(),
