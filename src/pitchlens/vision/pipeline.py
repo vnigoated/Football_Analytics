@@ -14,9 +14,10 @@ Steps per clip (each from an earlier work package):
 6. no jersey numbers yet (predicted as null).
 
 GS-HOTA (Somers et al., CVPRW 2024) is HOTA with the similarity ``LocSim × IdSim``: ``LocSim = exp(ln(0.05) d² / τ²)``
-with d the pitch distance and τ = 5 m (0.05 at 5 m: never matched beyond), and ``IdSim = 1`` only if the attributes
-match: role, team (people with a team in the ground truth) and jersey (people with a number in the ground truth).
-Attributes missing from the ground truth are not checked. The ball is not scored.
+with d the pitch distance and τ = 5 m (0.05 at 5 m: never matched beyond), and ``IdSim = 1`` only if role, team and
+jersey are equal under the official evaluator's rules (sn-trackeval): team counts for players and goalkeepers only,
+jersey for players only, and a null number matches only a null number. The ball is not scored. Scored frames:
+labelled people, pitch and camera. ``write_predictions`` exports the official prediction format.
 """
 
 from __future__ import annotations
@@ -61,7 +62,8 @@ def gs_ground_truth(images: pl.DataFrame, objects: pl.DataFrame, use_raw: bool =
     frames = {
         r["image_id"]: (r["frame"], r["width"] or 1920, r["height"] or 1080)
         for r in images.iter_rows(named=True)
-        if r["has_labeled_person"] is not False
+        if r["has_labeled_person"] is not False and r["has_labeled_pitch"] is not False
+        and r["has_labeled_camera"] is not False  # the frames the official evaluator scores
     }
     rows = []
     for o in objects.iter_rows(named=True):
@@ -304,9 +306,9 @@ def assign_roles(
 
 
 def game_state(tracks_pitch: pl.DataFrame, roles: dict[int, tuple[str, str | None]],
-               pitch_margin: float | None = 5.0) -> pl.DataFrame:
+               pitch_margin: float | None = 5.0, jerseys: dict[int, str | None] | None = None) -> pl.DataFrame:
     """Predictions in the ``GS_SCHEMA`` layout: boxes with a pitch position (within ``pitch_margin`` metres of the
-    pitch, if given), role, team and jersey (null)."""
+    pitch, if given), role, team and jersey number (track id -> number in ``jerseys``; null if missing)."""
     t = tracks_pitch.filter(pl.col("pitch_x").is_not_null())
     if pitch_margin is not None:
         t = t.filter((pl.col("pitch_x").abs() <= HALF_LENGTH + pitch_margin)
@@ -316,7 +318,7 @@ def game_state(tracks_pitch: pl.DataFrame, roles: dict[int, tuple[str, str | Non
     return t.with_columns(
         role=pl.Series([r for r, _ in rt], dtype=pl.String),
         team=pl.Series([tm for _, tm in rt], dtype=pl.String),
-        jersey=pl.lit(None, pl.String),
+        jersey=pl.Series([(jerseys or {}).get(i) for i in ids], dtype=pl.String),
     ).select(list(GS_SCHEMA)).cast(GS_SCHEMA)
 
 
@@ -350,14 +352,26 @@ def loc_sim(gt_xy: np.ndarray, pr_xy: np.ndarray, tau: float = TAU_M) -> np.ndar
     return np.exp(np.log(0.05) * d2 / tau**2)
 
 
+def normalise_attributes(df: pl.DataFrame) -> pl.DataFrame:
+    """The official evaluator's rules (sn-trackeval ``soccernet_gs.py``), applied to labels and predictions alike:
+    team only for players and goalkeepers, jersey only for players; otherwise null."""
+    return df.with_columns(
+        team=pl.when(pl.col("role").is_in(TEAM_ROLES)).then(pl.col("team")).otherwise(pl.lit(None, pl.String)),
+        jersey=pl.when(pl.col("role") == "player").then(pl.col("jersey")).otherwise(pl.lit(None, pl.String)),
+    )
+
+
 def id_sim(gt: pl.DataFrame, pr: pl.DataFrame, attributes: Sequence[str]) -> np.ndarray:
-    """1 where every requested attribute present in the ground truth matches, else 0."""
+    """1 where every requested attribute is equal, else 0 (inputs normalised with ``normalise_attributes``).
+
+    As in the official evaluator, null equals null only: a player whose number is null in the labels (never
+    visible) matches only a prediction without a number.
+    """
     s = np.ones((gt.height, pr.height), bool)
     for a in attributes:
         g = np.array(gt[a].to_list(), dtype=object)
         p = np.array(pr[a].to_list(), dtype=object)
-        known = np.array([v is not None for v in g])
-        s &= ~known[:, None] | (g[:, None] == p[None, :])
+        s &= g[:, None] == p[None, :]
     return s.astype(float)
 
 
@@ -366,6 +380,7 @@ def gs_hota(gt: pl.DataFrame, pred: pl.DataFrame, frames: Iterable[int],
     """HOTA metric dict of one clip with the GS-HOTA similarity (``attributes=()``: position only)."""
     from trackers.eval import compute_hota_metrics
 
+    gt, pred = normalise_attributes(gt), normalise_attributes(pred)
     gt_f = {k[0]: g for k, g in gt.group_by("frame")}
     pr_f = {k[0]: g for k, g in pred.filter(pl.col("pitch_x").is_not_null()).group_by("frame")}
     gi_all, pi_all, sims = [], [], []
@@ -459,14 +474,37 @@ def track_clips(jobs: dict[str, tuple[str | Path, pl.DataFrame]], workers: int |
 
 def clip_game_state(cpu: dict[str, Any], hs: dict[int, np.ndarray | None] | None = None,
                     outlier_z: float | None = None, k: int = 2, pitch_margin: float | None = 5.0,
-                    left_is_negative_x: bool = True, tracks_pitch: pl.DataFrame | None = None) -> pl.DataFrame:
+                    left_is_negative_x: bool = True, tracks_pitch: pl.DataFrame | None = None,
+                    jerseys: dict[int, str | None] | None = None) -> pl.DataFrame:
     """Steps 4-6 for one clip from the CPU stage's output and per-frame homographies ``hs`` (or tracks already
     mapped to the pitch, ``tracks_pitch = to_pitch(cpu["tracks"], hs)``, to try role settings quickly)."""
     tp = tracks_pitch if tracks_pitch is not None else to_pitch(cpu["tracks"], hs)
     c = cpu["crops"]
     roles = assign_roles(tp, c["id"].to_numpy(), cpu["colour"], (c["y2"] - c["y1"]).to_numpy(), k=k,
                          outlier_z=outlier_z, left_is_negative_x=left_is_negative_x)
-    return game_state(tp, roles, pitch_margin)
+    return game_state(tp, roles, pitch_margin, jerseys)
+
+
+def write_predictions(pred: pl.DataFrame, images: pl.DataFrame, path: str | Path) -> None:
+    """One clip's predictions as the official SoccerNet GSR JSON (``{"predictions": [...]}``), for sn-trackeval."""
+    import json
+
+    ids = dict(zip(images["frame"].to_list(), images["image_id"].to_list(), strict=True))
+    out = []
+    for r in pred.filter(pl.col("pitch_x").is_not_null()).iter_rows(named=True):
+        if r["frame"] not in ids:
+            continue
+        x, y = float(r["pitch_x"]), float(r["pitch_y"])
+        out.append({
+            "image_id": ids[r["frame"]], "track_id": int(r["id"]), "category_id": 1, "supercategory": "object",
+            "confidence": 1.0,
+            "attributes": {"role": r["role"], "team": r["team"], "jersey": r["jersey"]},
+            "bbox_pitch": {"x_bottom_left": x, "y_bottom_left": y, "x_bottom_right": x, "y_bottom_right": y,
+                           "x_bottom_middle": x, "y_bottom_middle": y},
+            "bbox_image": {"x": r["x1"], "y": r["y1"], "w": r["x2"] - r["x1"], "h": r["y2"] - r["y1"]},
+        })
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps({"predictions": out}), encoding="utf-8")
 
 
 # ---------------------------------------------------------------- one video, all steps
