@@ -18,13 +18,16 @@ from chat logs or Colab sessions. Update it after each step.
 | 8 | People can be tracked; identity across camera pans is the hard part | held-out HOTA 0.647 (OC-SORT + camera-motion compensation), DetA 0.74, AssA 0.57; with perfect boxes AssA only 0.79 | `docs/results/phase2_a3_tracking.md`; Drive `outputs/tracking/tracking_results.json` |
 | 9 | Teams can be found per clip from shirt colour, without training | held-out player team accuracy 0.945 (colour without lightness, per track, k = 2); a general image embedding (SigLIP) only 0.65; lightness split clips into sun / shade | `docs/results/phase2_a4_teams.md`; Drive `outputs/tracking/teams_*` |
 | 10 | Player pitch positions from broadcast frames, trained with labels derived for free from SN-GSR | median error 0.61 m, mean 0.94 m, 90% within 2 m, in 84.7% of frames (6+ keypoint inliers; 4-inlier fits were 86% wrong) | `docs/results/phase2_a5_keypoints.md`; Drive `outputs/keypoints/` |
+| 11 | End to end, broadcast → game state, above the SoccerNet baseline without jersey numbers | test GS-HOTA 23.50 (baseline 22.26), without jersey 52.61, position only 61.57 (baseline 42.65); valid held-out 25.38 / 61.66 / 70.10; oracle jersey → 69.35 | `docs/results/phase2_a6_pipeline.md`; Drive `outputs/pipeline/` (own GS-HOTA implementation: re-check with the official evaluator) |
+| 12 | Calibration over time: checking, filling and smoothing homographies | +7.3 position-HOTA points; frames with homography 80.4% → 92.2% | same |
+| 13 | Visible-player count from real video (B1 preview) | 13.52 vs 14.85 labelled per frame (−1.33), within ±1 in 70.6% of frames | same; `visible_players_held_out.csv` |
 
 ## Still needed for the real-video section
 
 - **B1:** visible-player count from the pipeline vs SN-GSR labels (bias and error per clip).
 - **B2:** that error propagated into the correction: the corrected-error interval for real use.
 - **B3:** share of frames removed as replays or close-ups.
-- **A6:** end-to-end GS-HOTA on SN-GSR (comparison: Choi 2026 reports 35.2 on 11 test sequences).
+- **A6 follow-up:** re-score with the official SoccerNet evaluator; jersey numbers (A7).
 - One figure: real visible-player distribution (SN-GSR) against the simulated cameras.
 
 ## Reproducibility details to report
