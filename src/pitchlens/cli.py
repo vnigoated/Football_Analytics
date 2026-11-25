@@ -427,6 +427,45 @@ def _plot_b2(errs: dict, out: Path) -> None:
     plt.close(fig)
 
 
+def _cmd_team_robustness(args: argparse.Namespace) -> None:
+    """Journal step 1: is the pressing bias driven by one team (Fortuna Duesseldorf in 5 of 7 IDSSE matches)?"""
+    import json
+
+    from pitchlens.analytics.robustness import (
+        balanced_mean,
+        correction_team_unseen,
+        leave_one_team_out,
+        per_team,
+        team_effect,
+        with_dataset,
+    )
+
+    t = with_dataset(pl.read_csv(args.table))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    summary = {}
+    with pl.Config(tbl_rows=30, tbl_cols=12, tbl_width_chars=200, fmt_str_lengths=30):
+        print(per_team(t))
+        for name in ["IDSSE", "Metrica"]:
+            d = t.filter(pl.col("dataset") == name)
+            m, lo, hi = balanced_mean(d, n_boot=args.n_boot, seed=args.seed)
+            summary[name] = {"rows": d.height, "mean_bias": round(float(d["bias"].mean()), 2),
+                             "team_balanced_bias": round(m, 2), "ci_low": round(lo, 2), "ci_high": round(hi, 2)}
+        print(json.dumps(summary, indent=1))
+        idsse = t.filter(pl.col("dataset") == "IDSSE")
+        loo = leave_one_team_out(idsse)
+        loo.write_csv(out / "leave_one_team_out_idsse.csv")
+        print(loo)
+        eff = team_effect(idsse, args.team, n_boot=args.n_boot, seed=args.seed)
+        print("team effect at equal visibility:", eff)
+        res, cor = correction_team_unseen(t)
+        res.write_csv(out / "correction_team_unseen.csv")
+        print("correction with the pressing team unseen:", {k: round(v, 2) for k, v in cor.items()})
+    summary.update({"team_effect": eff, "correction_team_unseen": cor})
+    (out / "team_robustness.json").write_text(json.dumps(summary, indent=2))
+    print(f"Saved -> {out}")
+
+
 def _cmd_video(args: argparse.Namespace) -> None:
     """Broadcast clip -> per-frame pitch positions, roles and teams (CSV)."""
     import tempfile
@@ -528,6 +567,14 @@ def main(argv: list[str] | None = None) -> None:
     ce.add_argument("--out", default="outputs/b2_propagation")
     ce.add_argument("--no-plot", action="store_true")
     ce.set_defaults(func=_cmd_count_error)
+
+    tr = sub.add_parser("team-robustness", help="Journal step 1: is the pressing bias driven by one team?")
+    tr.add_argument("--table", default="outputs/correction/correction_per_broadcast.csv")
+    tr.add_argument("--team", default="Fortuna Düsseldorf")
+    tr.add_argument("--n-boot", type=int, default=2000)
+    tr.add_argument("--seed", type=int, default=0)
+    tr.add_argument("--out", default="outputs/robustness")
+    tr.set_defaults(func=_cmd_team_robustness)
 
     vd = sub.add_parser("video", help="Broadcast clip -> pitch positions, roles and teams per frame")
     vd.add_argument("input", help="Video file, or a folder with img1/000001.jpg, ...")
