@@ -84,3 +84,27 @@ def test_model_forward_and_loss():
     out = model(x)
     assert out.shape == (2, 20)
     assert float(digit_loss(out, torch.tensor([[1, 0], [0, 7]]))) > 0
+
+
+def test_parseq_helpers():
+    from pitchlens.vision.jersey import (
+        PARSEQ_SIZE,
+        letterbox,
+        number_crop,
+        parseq_input,
+        reads_to_probs,
+        text_to_number,
+    )
+
+    tall = np.full((80, 20, 3), 200, np.uint8)
+    lb = letterbox(tall)
+    assert lb.shape == (PARSEQ_SIZE[1], PARSEQ_SIZE[0], 3)
+    assert (lb[:, :50] == 127).all() and (lb[:, 60:68] == 200).all()  # centred, aspect kept
+    img = np.zeros((1080, 1920, 3), np.uint8)
+    assert number_crop(img, (100, 100, 140, 200)).shape == (32, 128, 3)
+    assert number_crop(img, (5000, 5000, 5010, 5010)).shape == (32, 128, 3)
+    x = parseq_input(lb, np.random.default_rng(0))
+    assert x.shape == (3, 32, 128) and x.min() >= -1 and x.max() <= 1
+    assert [text_to_number(t) for t in ["10", "7", "0", "123", "a1", " 9 "]] == [10, 7, None, None, None, 9]
+    p = reads_to_probs([("23", 0.8), ("ab", 0.9), ("5", 0.4)])
+    assert p.shape == (3, 100) and p[0, 23] == pytest.approx(0.8) and p[1].sum() == 0 and p[2, 5] == pytest.approx(0.4)

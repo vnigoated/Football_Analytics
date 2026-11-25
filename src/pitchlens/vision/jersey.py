@@ -60,9 +60,10 @@ def build_jersey_items(
     min_height: float = 50.0,
     workers: int = 8,
     log: Callable[[str], None] | None = print,
+    crop_fn: Callable[[np.ndarray, Sequence[float]], np.ndarray] | None = None,
 ) -> list[dict[str, Any]]:
     """Save torso crops of labelled players and goalkeepers with a number (every ``every``-th frame, boxes at least
-    ``min_height`` px tall) as JPEGs in ``out_dir``; returns ``{"image", "number", "sequence", "track"}`` items."""
+    ``min_height`` px tall) as JPEGs in ``out_dir`` (``crop_fn``: default ``jersey_crop``); returns ``{"image", "number", "sequence", "track"}`` items."""
     from pitchlens.data.gsr import load_sequence
 
     out = Path(out_dir)
@@ -78,7 +79,7 @@ def build_jersey_items(
         for r in rows:
             name = out / f"{Path(seq_dir).name}_{frame:06d}_{r['track_id']}.jpg"
             if not name.exists():
-                cv2.imwrite(str(name), jersey_crop(img, (r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"])),
+                cv2.imwrite(str(name), (crop_fn or jersey_crop)(img, (r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"])),
                             [cv2.IMWRITE_JPEG_QUALITY, 95])
             res.append({"image": str(name), "number": str(int(r["jersey"])), "sequence": Path(seq_dir).name,
                         "track": int(r["track_id"])})
@@ -272,15 +273,18 @@ def sample_jersey_crops(tracks: pl.DataFrame, every: int = 2, max_per_track: int
     return t.select("frame", "id", "x1", "y1", "x2", "y2").sort("frame", "id")
 
 
-def crops_for(boxes: pl.DataFrame, load_frame: Callable[[int], np.ndarray], workers: int = 8) -> list[np.ndarray]:
-    """RGB crops for the rows of ``boxes`` (``frame, x1, y1, x2, y2``), in row order; frames read in parallel."""
+def crops_for(boxes: pl.DataFrame, load_frame: Callable[[int], np.ndarray], workers: int = 8,
+              crop_fn: Callable[[np.ndarray, Sequence[float]], np.ndarray] | None = None) -> list[np.ndarray]:
+    """Crops (``crop_fn``, default ``jersey_crop``) for the rows of ``boxes`` (``frame, x1, y1, x2, y2``), in row
+    order; frames read in parallel."""
+    crop = crop_fn or jersey_crop
     out: list[np.ndarray | None] = [None] * boxes.height
     groups = [(int(f), g) for (f,), g in boxes.with_row_index("_i").group_by("frame", maintain_order=True)]
 
     def one(fg):
         frame, g = fg
         img = load_frame(frame)
-        return [(r["_i"], jersey_crop(img, (r["x1"], r["y1"], r["x2"], r["y2"]))) for r in g.iter_rows(named=True)]
+        return [(r["_i"], crop(img, (r["x1"], r["y1"], r["x2"], r["y2"]))) for r in g.iter_rows(named=True)]
 
     with ThreadPoolExecutor(workers) as pool:
         for res in pool.map(one, groups):
@@ -321,3 +325,141 @@ def track_accuracy(pred: dict[int, str | None], truth: dict[int, str | None]) ->
         "numbered_read": round(float(np.mean([pred[k] == truth[k] for k in numbered])), 4) if numbered else float("nan"),
         "wrong_number": round(float(np.mean([pred[k] is not None and pred[k] != truth[k] for k in keys])), 4),
     }
+
+
+# ---------------------------------------------------------------- PARSeq: a pretrained scene-text recogniser (A7 run 2)
+
+PARSEQ_SIZE = (128, 32)  # PARSeq input (w, h)
+PARSEQ_REPO = "baudm/parseq"  # Apache-2.0, weights from the repository's releases
+
+
+def letterbox(rgb: np.ndarray, size: tuple[int, int] = PARSEQ_SIZE) -> np.ndarray:
+    """Resize keeping the aspect ratio and pad with grey to ``size`` (w, h): digits keep their shape."""
+    w, h = size
+    ih, iw = rgb.shape[:2]
+    out = np.full((h, w, 3), 127, np.uint8)
+    if ih == 0 or iw == 0:
+        return out
+    s = min(w / iw, h / ih)
+    nw, nh = min(max(round(iw * s), 1), w), min(max(round(ih * s), 1), h)
+    r = cv2.resize(rgb, (nw, nh), interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_CUBIC)
+    x0, y0 = (w - nw) // 2, (h - nh) // 2
+    out[y0:y0 + nh, x0:x0 + nw] = r
+    return out
+
+
+def number_crop(img: np.ndarray, box: Sequence[float]) -> np.ndarray:
+    """Where a shirt number sits (rows 12-50% of the box, the full width plus 5% on each side), at the original
+    resolution, letterboxed to ``PARSEQ_SIZE``."""
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    H, W = img.shape[:2]
+    r0, r1 = int(max(y1 + 0.12 * h, 0)), int(min(y1 + 0.50 * h, H))
+    c0, c1 = int(max(x1 - 0.05 * w, 0)), int(min(x2 + 0.05 * w, W))
+    if r1 <= r0 or c1 <= c0:
+        return letterbox(np.zeros((1, 1, 3), np.uint8))
+    return letterbox(img[r0:r1, c0:c1])
+
+
+def parseq_input(rgb: np.ndarray, rng: np.random.Generator | None = None) -> np.ndarray:
+    """(3, 32, 128) input in [-1, 1] (PARSeq's normalisation); ``rng`` adds colour jitter."""
+    x = (letterbox(rgb) if rgb.shape[:2] != PARSEQ_SIZE[::-1] else rgb).astype(np.float32) / 255.0
+    if rng is not None:
+        x = x * rng.uniform(0.7, 1.3) + rng.uniform(-0.1, 0.1)
+        grey = x.mean(2, keepdims=True)
+        x = np.clip(grey + (x - grey) * rng.uniform(0.6, 1.4), 0, 1)
+    return ((x - 0.5) / 0.5).transpose(2, 0, 1).astype(np.float32)
+
+
+def load_parseq(device: str = "cuda", checkpoint: str | Path | None = None):
+    """Pretrained PARSeq from torch.hub (``checkpoint``: our fine-tuned weights)."""
+    import torch
+
+    model = torch.hub.load(PARSEQ_REPO, "parseq", pretrained=True, trust_repo=True)
+    if checkpoint is not None:
+        model.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+    return model.to(device).eval()
+
+
+def text_to_number(text: str) -> int | None:
+    """"10" -> 10; anything but 1-2 digits (1-99) -> None."""
+    t = text.strip()
+    if not t.isdigit() or not 1 <= len(t) <= 2:
+        return None
+    n = int(t)
+    return n if 1 <= n <= 99 else None
+
+
+def parseq_read(model: Any, crops: list[np.ndarray], device: str = "cuda",
+                batch: int = 512) -> list[tuple[str, float]]:
+    """(text, confidence) per crop; confidence = product of the character probabilities (incl. end of text)."""
+    import torch
+
+    out: list[tuple[str, float]] = []
+    model.eval()
+    with torch.no_grad():
+        for i in range(0, len(crops), batch):
+            x = torch.from_numpy(np.stack([parseq_input(c) for c in crops[i:i + batch]])).to(device)
+            probs = model(x).softmax(-1)
+            texts, confs = model.tokenizer.decode(probs)
+            out += [(t, float(c.prod())) for t, c in zip(texts, confs, strict=True)]
+    return out
+
+
+def reads_to_probs(reads: list[tuple[str, float]]) -> np.ndarray:
+    """(N, 100) like ``number_probs``: the read number gets the read's confidence, non-numbers get nothing."""
+    p = np.zeros((len(reads), NUM_NUMBERS), np.float32)
+    for i, (t, c) in enumerate(reads):
+        n = text_to_number(t)
+        if n is not None:
+            p[i, n] = c
+    return p
+
+
+def finetune_parseq(
+    model: Any,
+    items: list[dict[str, Any]],
+    out_path: str | Path,
+    epochs: int = 3,
+    batch: int = 128,
+    lr: float = 1e-4,
+    workers: int = 8,
+    device: str = "cuda",
+    log: Callable[[str], None] = print,
+):
+    """Fine-tune PARSeq on ``{"image", "number"}`` crops with its own training loss; saves the weights each epoch.
+
+    Use crops that show a number (e.g. where the pretrained model already reads some digits): the labels are per
+    track, and training on crops without a visible number teaches the model to guess from appearance.
+    """
+    import torch
+
+    class Crops(torch.utils.data.Dataset):
+        def __len__(self):
+            return len(items)
+
+        def __getitem__(self, i):
+            rgb = cv2.cvtColor(cv2.imread(items[i]["image"]), cv2.COLOR_BGR2RGB)
+            return torch.from_numpy(parseq_input(rgb, np.random.default_rng())), items[i]["number"]
+
+    dl = torch.utils.data.DataLoader(Crops(), batch_size=batch, shuffle=True, num_workers=workers, drop_last=True)
+    if not hasattr(model, "_device"):  # PARSeq's training_step uses self._device, defined only on the inner network
+        type(model)._device = property(lambda self: next(self.parameters()).device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=epochs * max(len(dl), 1), pct_start=0.1)
+    model.train()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # Lightning's self.log() without a Trainer
+        for epoch in range(epochs):
+            tot = 0.0
+            for i, (x, labels) in enumerate(dl):
+                loss = model.training_step((x.to(device), list(labels)), i)
+                loss = loss["loss"] if isinstance(loss, dict) else loss
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                opt.step()
+                sched.step()
+                tot += float(loss)
+            torch.save(model.state_dict(), out_path)
+            log(f"epoch {epoch + 1}/{epochs}: loss {tot / max(len(dl), 1):.4f}")
+    return model.eval()
