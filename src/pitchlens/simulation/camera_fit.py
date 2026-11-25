@@ -87,19 +87,22 @@ def footprint_series(
     }
 
 
-def _ar_tau(resid: np.ndarray, seg: np.ndarray, lag_frames: int = 10) -> float:
+def _ar_tau(resid: np.ndarray, seg: np.ndarray, lag_frames: int = 10, fps: float = FPS) -> float:
     """Time constant (s) of an AR(1) process from the autocorrelation at ``lag_frames``."""
     same = seg[lag_frames:] == seg[:-lag_frames]
     r = np.corrcoef(resid[lag_frames:][same], resid[:-lag_frames][same])[0, 1]
     r = float(np.clip(r, 0.01, 0.999))
-    return -(lag_frames / FPS) / np.log(r)
+    return -(lag_frames / fps) / np.log(r)
 
 
 def fit_wedge_camera(
     match_frames: list[pl.DataFrame],
     match_players: list[pl.DataFrame] | None = None,
+    fps: float = FPS,
 ) -> tuple[WedgeCamera, dict]:
     """Fit one WedgeCamera to several matches. Returns the camera and a fit report.
+
+    ``fps``: frame rate of the footprint series (SkillCorner 10, SoccerNet-GSR 25).
 
     With ``match_players`` the pan also follows the players' centre and the zoom their
     spread (an operator frames the play, not only the ball).
@@ -125,11 +128,11 @@ def fit_wedge_camera(
     lags = np.round(np.arange(0, 1.01, 0.1), 1)
     rmse = []
     for lag in lags:
-        a = float(np.exp(-1 / (FPS * lag))) if lag > 0 else 0.0
+        a = float(np.exp(-1 / (fps * lag))) if lag > 0 else 0.0
         e = _ema_seg(target, a, seg) - s["pan"]
         rmse.append(float(np.sqrt(np.mean(e[det] ** 2))))
     lag_s = float(lags[int(np.argmin(rmse))])
-    a = float(np.exp(-1 / (FPS * lag_s))) if lag_s > 0 else 0.0
+    a = float(np.exp(-1 / (fps * lag_s))) if lag_s > 0 else 0.0
     pan_resid = s["pan"] - _ema_seg(target, a, seg)
 
     B = np.c_[np.ones(len(det)), s["ball_dist"], s["players_spread"]]
@@ -140,7 +143,7 @@ def fit_wedge_camera(
     near_a, near_b = np.linalg.lstsq(B[:, :2], s["near"], rcond=None)[0]
     fov_resid = s["fov"] - B @ fcoef
     near_resid = s["near"] - (near_a + near_b * s["ball_dist"])
-    tau = float(np.median([_ar_tau(r, seg) for r in (pan_resid, fov_resid, near_resid)]))
+    tau = float(np.median([_ar_tau(r, seg, max(round(fps), 1), fps) for r in (pan_resid, fov_resid, near_resid)]))
 
     cam_xy = np.median(np.array(cams), axis=0)
     camera = WedgeCamera(

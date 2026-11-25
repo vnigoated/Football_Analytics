@@ -427,6 +427,109 @@ def _plot_b2(errs: dict, out: Path) -> None:
     plt.close(fig)
 
 
+def _cmd_team_robustness(args: argparse.Namespace) -> None:
+    """Journal step 1: is the pressing bias driven by one team (Fortuna Duesseldorf in 5 of 7 IDSSE matches)?"""
+    import json
+
+    from pitchlens.analytics.robustness import (
+        balanced_mean,
+        correction_team_unseen,
+        leave_one_team_out,
+        per_team,
+        team_effect,
+        with_dataset,
+    )
+
+    t = with_dataset(pl.read_csv(args.table))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    summary = {}
+    with pl.Config(tbl_rows=30, tbl_cols=12, tbl_width_chars=200, fmt_str_lengths=30):
+        print(per_team(t))
+        for name in ["IDSSE", "Metrica"]:
+            d = t.filter(pl.col("dataset") == name)
+            m, lo, hi = balanced_mean(d, n_boot=args.n_boot, seed=args.seed)
+            summary[name] = {"rows": d.height, "mean_bias": round(float(d["bias"].mean()), 2),
+                             "team_balanced_bias": round(m, 2), "ci_low": round(lo, 2), "ci_high": round(hi, 2)}
+        print(json.dumps(summary, indent=1))
+        idsse = t.filter(pl.col("dataset") == "IDSSE")
+        loo = leave_one_team_out(idsse)
+        loo.write_csv(out / "leave_one_team_out_idsse.csv")
+        print(loo)
+        eff = team_effect(idsse, args.team, n_boot=args.n_boot, seed=args.seed)
+        print("team effect at equal visibility:", eff)
+        res, cor = correction_team_unseen(t)
+        res.write_csv(out / "correction_team_unseen.csv")
+        print("correction with the pressing team unseen:", {k: round(v, 2) for k, v in cor.items()})
+    summary.update({"team_effect": eff, "correction_team_unseen": cor})
+    (out / "team_robustness.json").write_text(json.dumps(summary, indent=2))
+    print(f"Saved -> {out}")
+
+
+def _cmd_fit_camera_gsr(args: argparse.Namespace) -> None:
+    """Journal step 3: fit one WedgeCamera per SoccerNet-GSR game (Swiss Super League) from real footprints."""
+    import dataclasses
+    import json
+    import zipfile
+    from collections import defaultdict
+
+    import numpy as np
+
+    from pitchlens.data.gsr import parse_labels
+    from pitchlens.data.gsr_camera import clip_footprints, orient, visible_players
+    from pitchlens.simulation.camera_fit import fit_wedge_camera
+
+    games: dict[str, list] = defaultdict(list)
+    for zp in args.zips:
+        z = zipfile.ZipFile(zp)
+        split = Path(zp).stem
+        for n in z.namelist():
+            if n.endswith("Labels-GameState.json"):
+                d = json.loads(z.read(n))
+                games[f"{split}_{d['info']['game_id']}"].append(parse_labels(d, n.split("/")[0]))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for g, clips in sorted(games.items()):
+        frames = [orient(clip_footprints(im, ob)).with_columns(period=pl.lit(i + 1)) for i, (im, ob) in enumerate(clips)]
+        frames = [f for f in frames if f.height >= 50]
+        cam, rep = fit_wedge_camera(frames, None, fps=25.0)
+        (out / f"gsr_{g}.json").write_text(json.dumps(dataclasses.asdict(cam) | {"fps": 25.0, "seed": None}, indent=2))
+        vis = float(np.mean([visible_players(im, ob) for im, ob in clips]))
+        rows.append({"game": g, "clips": len(frames), "frames": rep["frames"], "cam_x": round(cam.cam_x, 1),
+                     "cam_y": round(cam.cam_y, 1), "fov_median_deg": rep["fov_deg_p10_p50_p90"][1],
+                     "fov_p10_p90": rep["fov_deg_p10_p50_p90"][::2], "lag_s": cam.lag_s, "pan_gain": round(cam.pan_gain, 2),
+                     "r2_pan": round(rep["r2_pan"], 3), "r2_fov": round(rep["r2_fov"], 3), "r2_near": round(rep["r2_near"], 3),
+                     "real_visible": round(vis, 2)})
+    table = pl.DataFrame(rows)
+    table.drop("fov_p10_p90").write_csv(out / "gsr_cameras.csv")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=220):
+        print(table)
+    print(f"Saved {len(rows)} cameras -> {out}")
+
+
+def _cmd_cross_league(args: argparse.Namespace) -> None:
+    """Journal step 3: correction fitted on the A-League stadium cameras, applied to the Swiss (SN-GSR) cameras."""
+    import json
+
+    from pitchlens.analytics.correction import broadcast_table
+    from pitchlens.analytics.robustness import transfer_correction
+
+    train = pl.read_csv(args.train)
+    test = pl.concat([broadcast_table(_load_visibility(d)) for d in args.dirs], how="vertical_relaxed")
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    res, summary = transfer_correction(train, test)
+    res.write_csv(out / "cross_league_per_broadcast.csv")
+    per_cam = res.group_by("camera").agg(pl.col("players_visible").mean().round(2), pl.col("bias").mean().round(2),
+                                         pl.col("error_transfer").abs().mean().round(2).alias("corrected_mae")).sort("players_visible")
+    per_cam.write_csv(out / "cross_league_per_camera.csv")
+    with pl.Config(tbl_rows=-1):
+        print(per_cam)
+    (out / "cross_league_summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+
+
 def _cmd_video(args: argparse.Namespace) -> None:
     """Broadcast clip -> per-frame pitch positions, roles and teams (CSV)."""
     import tempfile
@@ -528,6 +631,25 @@ def main(argv: list[str] | None = None) -> None:
     ce.add_argument("--out", default="outputs/b2_propagation")
     ce.add_argument("--no-plot", action="store_true")
     ce.set_defaults(func=_cmd_count_error)
+
+    fg = sub.add_parser("fit-camera-gsr", help="Journal step 3: one WedgeCamera per SoccerNet-GSR game")
+    fg.add_argument("--zips", nargs="+", default=["data/SN-GSR-2025/valid.zip", "data/SN-GSR-2025/test.zip"])
+    fg.add_argument("--out", default="configs/cameras/gsr")
+    fg.set_defaults(func=_cmd_fit_camera_gsr)
+
+    cl = sub.add_parser("cross-league", help="Journal step 3: A-League correction applied to Swiss cameras")
+    cl.add_argument("--train", default="outputs/correction/correction_per_broadcast.csv")
+    cl.add_argument("--dirs", nargs="+", default=["outputs/stadiums_gsr/idsse", "outputs/stadiums_gsr/metrica"])
+    cl.add_argument("--out", default="outputs/cross_league")
+    cl.set_defaults(func=_cmd_cross_league)
+
+    tr = sub.add_parser("team-robustness", help="Journal step 1: is the pressing bias driven by one team?")
+    tr.add_argument("--table", default="outputs/correction/correction_per_broadcast.csv")
+    tr.add_argument("--team", default="Fortuna Düsseldorf")
+    tr.add_argument("--n-boot", type=int, default=2000)
+    tr.add_argument("--seed", type=int, default=0)
+    tr.add_argument("--out", default="outputs/robustness")
+    tr.set_defaults(func=_cmd_team_robustness)
 
     vd = sub.add_parser("video", help="Broadcast clip -> pitch positions, roles and teams per frame")
     vd.add_argument("input", help="Video file, or a folder with img1/000001.jpg, ...")
