@@ -18,8 +18,9 @@ README = """How to compile (Overleaf)
    style)" -> Open as Template.
 2. In that project, delete interactapasample.tex and interactapasample.bib (keep interact.cls and the other
    class/style files).
-3. Upload -> select every file of this zip (main.tex, refs.bib, README_OVERLEAF.txt) and the figures folder
-   (or upload the zip and let Overleaf extract it).
+3. Unzip this file on your computer first (Overleaf does not unpack a zip uploaded into an existing project).
+   Upload main.tex (replace the template's main.tex) and refs.bib. Create a folder "figures" in the file tree and
+   upload the 5 PDFs into it.
 4. Menu -> Main document: main.tex. Compiler: pdfLaTeX. Recompile.
 
 Red [TODO: ...] marks are still open: journal step 6 (replay filter), funding statement, Zenodo DOI.
