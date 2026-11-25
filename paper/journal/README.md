@@ -5,8 +5,13 @@ correction validated on real broadcast video"**
 
 - **Target:** *Science and Medicine in Football*.
 - **Fallbacks:** *Journal of Quantitative Analysis in Sports*, *International Journal of Computer Science in Sport*.
-- **Template:** generic `article`, double spaced, with line numbers and author–year references, for review. Switch
-  to the journal's template if it requires one.
+- **Template:** `main.tex` uses the Taylor & Francis **Interact** layout with APA (author–date) references
+  (`apacite`). `interact.cls` is not in the repo; it comes with Overleaf's template "Taylor & Francis LaTeX template
+  for authors (Interact layout + American Psychological Association reference style)". `main_article.tex` is the
+  same text in the generic `article` class, as a fallback for other journals.
+- **Abstract:** 249 words, unstructured.
+- The journal's own author-instructions page could not be read automatically (HTTP 403). Third-party summaries
+  disagree on the reference style (APA, CSE author–date or Vancouver), so check the official page before submitting.
 
 ## What changed from the conference version (`paper/main.tex`)
 
@@ -25,11 +30,17 @@ correction validated on real broadcast video"**
 
 ```bash
 python paper/journal/make_journal_figures.py   # figures 2-5 from outputs/, figure 1 copied from paper/figures
-python paper/journal/make_overleaf_zip.py      # -> paper/journal/journal_overleaf.zip
+python paper/journal/make_overleaf_zip.py      # -> paper/journal/smf_overleaf.zip
 ```
 
-Upload the zip to Overleaf (New Project → Upload Project) and compile with pdfLaTeX. The bibliography uses
-`apalike`, which is built into Overleaf.
+To compile on Overleaf:
+
+1. Open the T&F Interact APA template.
+2. Delete its sample `.tex` and `.bib` files.
+3. Upload the zip contents.
+4. Set `main.tex` as the main document and compile with pdfLaTeX.
+
+The steps are also in `README_OVERLEAF.txt` inside the zip.
 
 ## To do before submission
 

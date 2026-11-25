@@ -1,54 +1,57 @@
-% Journal version (target: Science and Medicine in Football; fallback: JQAS / IJCSS).
-% Every number comes from docs/results/*.md (rows 1-25 of docs/PAPER_V2_NOTES.md); figures from
-% paper/journal/make_journal_figures.py. Check the journal's author guidelines (word limit, abstract format,
-% reference style, figure/table limits, title page and anonymisation) before submission.
-\documentclass[11pt]{article}
+% Science and Medicine in Football (Taylor & Francis), Interact layout + APA (author-date) reference style.
+% Needs interact.cls: create the Overleaf project from the template "Taylor & Francis LaTeX template for authors
+% (Interact layout + American Psychological Association reference style)", then upload this zip into it
+% (see README_OVERLEAF.txt). Every number comes from docs/results/*.md (rows 1-25 of docs/PAPER_V2_NOTES.md).
+% Red TODOs are filled after journal step 6 and before submission.
+\documentclass[]{interact}
 
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage[margin=2.5cm]{geometry}
-\usepackage{setspace}
-\usepackage{lineno}
-\usepackage{graphicx}
-\usepackage{booktabs}
+\usepackage{epstopdf}
+\usepackage[caption=false]{subfig}
+\usepackage[natbibapa,nodoi]{apacite}
+\setlength\bibhang{12pt}
+\renewcommand\bibliographytypesize{\fontsize{10}{12}\selectfont}
 \usepackage{amsmath}
+\usepackage{booktabs}
 \usepackage{xcolor}
-\usepackage[round,authoryear]{natbib}
+\usepackage{lineno}
 \usepackage{hyperref}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
+\begin{document}
+
+\articletype{ORIGINAL INVESTIGATION}
+
 \title{How much can you trust broadcast pressing data? Visibility bias in team pressing metrics, its drivers, and a
 correction validated on real broadcast video}
-\author{Varun Inamdar\\
-Vishwakarma University, Pune, India\\
-\texttt{vninamdar03@gmail.com}}
-\date{}
 
-\begin{document}
+\author{
+\name{Varun Inamdar\thanks{CONTACT Varun Inamdar. Email: vninamdar03@gmail.com}}
+\affil{Vishwakarma University, Pune, India}
+}
+
 \maketitle
-\doublespacing
 \linenumbers
 
 \begin{abstract}
-Tracking data derived from broadcast video is widely available, but the main camera shows only about 14 of the 22
-players at a time. We quantified how this partial view biases pressing metrics and how to correct it. Using full
-optical tracking of 10 professional matches from two providers (14 teams), we hid every player that a broadcast camera
-would not show and recomputed pressing intensity. The camera was fitted to the on-pitch footprints of 20 real
-broadcasts and validated on held-out matches (87.1\% per-player agreement; visible players reproduced exactly).
-Averaged over 20 stadium cameras, broadcast tracking undercounted a team's active pressers by 22.6\% (95\% CI 19.8 to
-25.2) in one dataset and 20.2\% (17.1 to 23.2) in the other; every one of the 14 teams was undercounted (18--28\%).
-The undercount was almost fully explained by the number of visible players ($r = 0.98$; about 4 percentage points per
-player), whereas pressure on the ball carrier was nearly unbiased unless the camera lagged. A correction based on the
-number of visible players reduced the mean absolute error from 21.9\% to 3.0\% on broadcasts whose stadium camera and
-match were both held out, and to 4.7\% on cameras fitted to a second league within the fitted visibility range. On
-real broadcast video, an open pipeline counted visible players to within about half a player after calibration on
-two independent datasets, keeping the corrected error at 3.0--3.6\% over a whole match. Live main-camera footage made up 64\% of 196
-fully labelled broadcasts, so close-ups must be filtered out before counting. Team-wide pressing metrics from
-broadcast data should therefore be corrected, or compared only between broadcasts with similar camera framing.
+Broadcast-derived tracking data is widely available, but the main camera shows only about 14 of the 22
+players at a time. We quantified how this partial view biases pressing metrics and how to correct it. Using optical
+tracking of 10 professional matches from two providers (14 teams), we hid every player a broadcast camera would not
+show and recomputed pressing intensity. The camera was fitted to the on-pitch footprints of 20 real broadcasts and
+validated on held-out matches (87.1\% per-player agreement). Averaged over 20 stadium cameras, broadcast tracking
+undercounted a team's active pressers by 22.6\% (95\% CI 19.8 to 25.2) and 20.2\% (17.1 to 23.2) in the two
+datasets, and every team was undercounted (18--28\%). The undercount was almost fully explained by the number of
+visible players ($r = 0.98$; about 4 percentage points per player), whereas pressure on the ball carrier was nearly
+unbiased unless the camera lagged. A correction based on the number of visible players reduced the mean absolute
+error from 21.9\% to 3.0\% when the stadium camera and match were held out, and to 4.7\% for a second league's cameras
+within the fitted visibility range. On real broadcast video, an open pipeline counted visible players to within about
+half a player on two independent datasets, keeping the corrected error at 3.0--3.6\% over a match. Because only 64\%
+of broadcast time shows the live main camera, close-ups must be filtered out first. Team-wide pressing metrics from
+broadcast data should be corrected, or compared only between similarly framed broadcasts.
 \end{abstract}
 
-\noindent\textbf{Keywords:} football; broadcast tracking; pressing; measurement bias; performance analysis;
-computer vision
+\begin{keywords}
+football; broadcast tracking; pressing; measurement bias; performance analysis; computer vision
+\end{keywords}
 
 % =============================================================================================
 \section{Introduction}
@@ -475,11 +478,11 @@ Code, fitted camera parameters and scripts to rebuild every table and figure are
 \citep{pitchlens}. \todo{Add the Zenodo DOI of the release.} All data are downloaded from their original sources
 (IDSSE, Metrica Sports, SkillCorner, SoccerNet, SportsMOT) and are not redistributed.
 
-\section*{Acknowledgements}
+\section*{Acknowledgement(s)}
 We thank IDSSE (Bassek et al.), Metrica Sports, SkillCorner, the SoccerNet team and the SportsMOT authors for making
 their data openly available.
 
-\bibliographystyle{apalike}
+\bibliographystyle{apacite}
 \bibliography{refs}
 
 \end{document}
