@@ -35,6 +35,85 @@ A6 run 1 used a looser rule that skipped attributes missing from the labels, so 
 A6 under the official rules. All predictions are also exported in the official JSON format and scored with
 sn-trackeval itself.
 
-## Results
+## Run 1 (2026-11-25, Colab A100, same software as A6)
 
-Pending run 1.
+### A6 re-scored with the official rules (our implementation)
+
+| | GS-HOTA | Without jersey | Role only | Position only |
+|---|---|---|---|---|
+| valid, held-out half | 25.24 | 61.01 | 66.81 | 69.47 |
+| valid, all | 24.40 | 60.45 | 63.69 | 66.51 |
+| test | 23.54 | 53.02 | 58.94 | 62.25 |
+
+These are within 0.6 points of the looser A6 run 1 rule.
+
+### Number reader
+
+**Training data.** 101,169 crops from 57 train clips. They contain only **41 different numbers**; the most common
+are 10, 9, 14, 8 and 4. Building the crops took 55 s.
+
+**Training** (12 epochs, about 1 min each):
+- Training loss fell from 2.02 to 0.04.
+- Crop accuracy on the tuning half stayed at **0.06–0.11**, best 0.114 at epoch 6.
+- So the network **overfits**. With few players and numbers, it can learn who the player is (kit, face) rather than
+  the digits.
+
+**Reading.** Up to 40 crops per track on all 107 clips took 156 s.
+
+**Reader on labelled tracks** (valid held-out half, 564 player tracks):
+
+| min_conf | Track right (incl. "no number") | Numbered tracks read right | Wrong number given |
+|---|---|---|---|
+| 0.3 | 0.174 | 0.202 | 0.823 |
+| 0.5 | 0.183 | 0.206 | 0.787 |
+| 0.7 | 0.209 | 0.206 | 0.707 |
+| 0.9 | 0.227 | 0.171 | 0.450 |
+
+**Vote** (tuning half, GS-HOTA): best `min_conf = 0.9`, `min_votes = 2`, giving 27.61 against 25.0–26.1 for the
+looser settings. Only very sure reads help: a wrong number costs as much as no number.
+
+### GS-HOTA with numbers
+
+**Our implementation:**
+
+| | GS-HOTA | With the labels' numbers on our tracks |
+|---|---|---|
+| A7, valid held-out half | 28.16 | 59.79 |
+| A7, all valid | 27.89 | 59.66 |
+| **A7, test** | **29.92** | 52.15 |
+
+**Official SoccerNet evaluator** (sn-trackeval, labels version 1.3; all clips of each split):
+
+| | GS-HOTA | DetA | AssA | LocA |
+|---|---|---|---|---|
+| A6 (no numbers), valid | 24.75 | 9.52 | 64.34 | 92.50 |
+| A7 (numbers), valid | 28.30 | 12.56 | 63.80 | 92.40 |
+| A6 (no numbers), **test** | **24.00** | 9.72 | 59.27 | 92.07 |
+| A7 (numbers), **test** | **30.52** | 15.89 | 58.65 | 92.69 |
+
+**The two implementations agree within 0.6 points** (test A7: ours 29.92, official 30.52; A6: 23.54 vs 24.00).
+Our faster evaluation can therefore be used for tuning, and the official numbers are reported.
+
+## Findings
+
+1. **Official test GS-HOTA 30.52.** That is 8 points above the SoccerNet baseline (22.26) and below Choi (2026,
+   35.2 on 11 test clips) and the 2024 challenge winner (63.81).
+2. **The reader is weak but already useful:** +6.5 points on test (24.00 → 30.52), helped by voting only on very
+   sure reads.
+3. **The headroom is in the numbers.** With the labels' numbers our tracks reach 52–60 (official rules). Reading
+   numbers well is worth about 22–30 more points.
+4. **Why the reader is weak:**
+   - SN-GSR train has only 41 different numbers and few players, so a classifier trained from scratch learns
+     appearance.
+   - The crops are small and blurred.
+   - Many crops show the front or side, where the number is small or hidden.
+5. **Next (A7 run 2).** Read numbers with a pretrained scene-text recogniser, which knows digits from millions of
+   text images rather than from 41 numbers. Use PARSeq (Apache-2.0), first as is, then fine-tuned on our crops.
+   Add a legibility filter that drops crops showing no number, as in the jersey-number literature. Compare at the
+   track level with the table above.
+
+Outputs (Drive `outputs/jersey/`):
+- `resnet34/` (weights);
+- `probs_valid/` and `probs_test/` (per-crop number probabilities);
+- `vote_tune.csv`, `gs_hota_a7.csv`, `settings.json`;
+- `official_{valid,test}_{pitchlens_a6,pitchlens_a7}.txt`.

@@ -21,6 +21,8 @@ from chat logs or Colab sessions. Update it after each step.
 | 11 | End to end, broadcast → game state, above the SoccerNet baseline without jersey numbers | test GS-HOTA 23.50 (baseline 22.26), without jersey 52.61, position only 61.57 (baseline 42.65); valid held-out 25.38 / 61.66 / 70.10; oracle jersey → 69.35 | `docs/results/phase2_a6_pipeline.md`; Drive `outputs/pipeline/` (own GS-HOTA implementation: re-check with the official evaluator) |
 | 12 | Calibration over time: checking, filling and smoothing homographies | +7.3 position-HOTA points; frames with homography 80.4% → 92.2% | same |
 | 13 | Visible-player count from real video (B1 preview) | 13.52 vs 14.85 labelled per frame (−1.33), within ±1 in 70.6% of frames | same; `visible_players_held_out.csv` |
+| 14 | Official SoccerNet evaluator: full pipeline with jersey numbers | **test GS-HOTA 30.52** (DetA 15.89, AssA 58.65; baseline 22.26), valid 28.30; without numbers 24.00 test; our implementation agrees within 0.6 points | `docs/results/phase2_a7_jersey.md`; Drive `outputs/jersey/official_*.txt` |
+| 15 | Jersey numbers are the bottleneck | with labelled numbers on our tracks 52.15 (test) / 59.79 (valid held-out); own reader reads 17-21% of numbered tracks (41 numbers in train -> overfits) | same |
 
 ## Still needed for the real-video section
 
