@@ -108,3 +108,29 @@ def correction_team_unseen(t: pl.DataFrame) -> tuple[pl.DataFrame, dict[str, flo
     e = res["error_team_unseen"].to_numpy()
     return res, {"rows": float(len(e)), "mean_error": float(e.mean()), "mean_abs_error": float(np.abs(e).mean()),
                  "p95_abs_error": float(np.quantile(np.abs(e), 0.95))}
+
+
+def transfer_correction(train: pl.DataFrame, test: pl.DataFrame) -> tuple[pl.DataFrame, dict[str, float]]:
+    """Correction line fitted on ``train`` (e.g. the A-League stadium cameras) and applied to ``test`` (e.g. cameras
+    fitted to another league); for each test row the line leaves out the row's match, so the match is unseen too.
+    Returns per-row errors and a summary (raw and corrected errors, %)."""
+    out = []
+    for (match,), g in test.group_by("match_id"):
+        tr = train.filter(pl.col("match_id") != match)
+        k, b = np.polyfit(tr["players_visible"].to_numpy(), tr["bias"].to_numpy(), 1)
+        pred = k * g["players_visible"].to_numpy() + b
+        cor = g["sim"].to_numpy() / (1 + pred / 100)
+        out.append(g.with_columns(pl.Series("predicted_bias", pred),
+                                  pl.Series("error_transfer", (cor / g["gt"].to_numpy() - 1) * 100)))
+    res = pl.concat(out)
+    raw, cor = res["bias"].to_numpy(), res["error_transfer"].to_numpy()
+    ks, bs = np.polyfit(res["players_visible"].to_numpy(), raw, 1)
+    kt, bt = np.polyfit(train["players_visible"].to_numpy(), train["bias"].to_numpy(), 1)
+    return res, {
+        "rows": float(res.height),
+        "raw_mean_error": float(raw.mean()), "raw_mean_abs_error": float(np.abs(raw).mean()),
+        "corrected_mean_error": float(cor.mean()), "corrected_mean_abs_error": float(np.abs(cor).mean()),
+        "corrected_p95_abs_error": float(np.quantile(np.abs(cor), 0.95)),
+        "slope_train": float(kt), "intercept_train": float(bt),
+        "slope_test": float(ks), "intercept_test": float(bs),
+    }
