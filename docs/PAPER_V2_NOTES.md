@@ -46,3 +46,7 @@ from chat logs or Colab sessions. Update it after each step.
 - Run 2: NVIDIA L4 24 GB, Python 3.13, torch 2.14.1+cu130, rfdetr 1.12.1, 10 epochs in ~93 min. **To record in each run:** GPU type, `torch` and `rfdetr` versions (printed by the notebook's install cell).
 - Licences: SN-GSR images may not be published, so the paper's example figures must use our own drawings or
   permitted material, not SN-GSR frames.
+
+## Draft status
+
+- 2026-11-25: real-video section drafted in `paper/main.tex` (Section 5, Table 4, Fig. 4) from rows 1-20 (branch `paper/v2-real-video`).

@@ -195,10 +195,63 @@ def figure_lag(t: pl.DataFrame) -> None:
     plt.close(fig)
 
 
+def figure_real_video(counts: str = "outputs/b1_visible/counts_tracks.parquet",
+                      table: str = "outputs/correction/correction_per_broadcast.csv", draws: int = 500) -> None:
+    """Fig. 4: visible players counted on real video (SN-GSR) and the corrected pressing error with that count."""
+    from pitchlens.analytics.propagation import clip_errors, correlated, independent, propagate, zero
+    from pitchlens.analytics.visible_count import calibrate, fit_calibration
+
+    c = pl.read_parquet(counts)
+    a, b = fit_calibration(c.filter(pl.col("part") == "tune"))
+    ev = calibrate(c.filter(pl.col("part") != "tune"), a, b)
+    clips = ev.group_by("sequence", "part").agg(pl.col("gt").mean(), pl.col("ours").mean())
+    t = pl.read_csv(table)
+    raw, cal = clip_errors(c), clip_errors(c, calibration=(a, b))
+    errs = [propagate(t, zero(), 1)[0], propagate(t, independent(cal), draws), propagate(t, correlated(cal), draws),
+            propagate(t, independent(raw), draws)]
+    labels = ["true\ncount", "video,\nwhole match", "video,\none clip", "video, not\ncalibrated"]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.0, 2.6), gridspec_kw={"width_ratios": [1, 1.25]})
+    for (part, color, marker) in [("held out", BLUE, "o"), ("test", ORANGE, "s")]:
+        s = clips.filter(pl.col("part") == part)
+        ax1.scatter(s["gt"], s["ours"], s=16, marker=marker, facecolor=color, edgecolor="white", linewidths=0.6,
+                    zorder=3, label=f"{'valid, held out' if part == 'held out' else 'test'} ({s.height} clips)")
+    lo = float(min(clips["gt"].min(), clips["ours"].min())) - 0.5
+    hi = float(max(clips["gt"].max(), clips["ours"].max())) + 0.5
+    ax1.plot([lo, hi], [lo, hi], color=INK2, lw=0.8, ls="--", zorder=2)
+    ax1.set_xlim(lo, hi)
+    ax1.set_ylim(lo, hi)
+    ax1.set_xlabel("Labelled players per frame (clip mean)")
+    ax1.set_ylabel("Pipeline, calibrated")
+    ax1.legend(loc="upper left", fontsize=6.5)
+    ax1.set_title("(a) Visible players on real video", fontsize=8)
+
+    data = [np.asarray(e).ravel() for e in errs]
+    box = ax2.boxplot(data, whis=(2.5, 97.5), showfliers=False, widths=0.55, patch_artist=True,
+                      medianprops={"color": INK, "lw": 1})
+    for patch, color in zip(box["boxes"], [HIDDEN, BLUE, BLUE, ORANGE], strict=True):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.8)
+        patch.set_edgecolor(INK2)
+    ax2.set_xticks(range(1, len(labels) + 1), labels, fontsize=7)
+    ax2.axhline(0, color=INK2, lw=0.8)
+    ax2.set_ylabel("Error after correction (%)")
+    ax2.set_title("(b) Corrected active pressers", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(OUT / "fig4_real_video.pdf")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
+    import sys
+
     OUT.mkdir(parents=True, exist_ok=True)
-    per_camera = _per_camera()
-    figure_visibility(per_camera)
-    figure_lag(per_camera)
-    figure_cameras()
+    if sys.argv[1:] == ["real-video"]:
+        figure_real_video()
+    else:
+        per_camera = _per_camera()
+        figure_visibility(per_camera)
+        figure_lag(per_camera)
+        figure_cameras()
+        figure_real_video()
     print("Saved figures to", OUT)

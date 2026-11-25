@@ -38,7 +38,11 @@ undercount ranges from 10\% to 29\% and is almost perfectly explained by the num
 ($-1.7\%$), but grows with camera lag ($r = -0.98$): even 0.2\,s of lag increases it about fourfold. Both drivers
 can be measured on the broadcast itself. A simple correction based on the number of visible players reduces the mean
 absolute error in active pressers from 21.8\% to 3.1\% on broadcasts whose stadium camera and match were both held
-out. Code and fitted cameras are open source.
+out. We then measure the correction's input on real broadcast video. An open pipeline (detection, tracking, pitch
+calibration, teams and jersey numbers) reaches an official GS-HOTA of 39.8 on the SoccerNet Game State Reconstruction
+test set (baseline 22.3). Its count of visible players is 0.7--1.1 players too low, and a calibration fitted on
+separate clips removes this bias. With the calibrated video count, the corrected error over a whole match is 3.1\%,
+the same as with the true count. Code and fitted cameras are open source.
 \keywords{football \and soccer \and broadcast tracking \and pressing \and measurement bias \and uncertainty}
 \end{abstract}
 
@@ -65,6 +69,8 @@ on full tracking with the same metric after hiding off-screen players.
 \item \textbf{How certain is it?} We propagate three sources of uncertainty: the matches in the sample, variation within
 a match, and differences between stadium cameras.
 \item \textbf{What drives it?} We relate the bias to measurable properties of the broadcast.
+\item \textbf{Does the correction work on real video?} We measure its input, the number of visible players, with a
+computer-vision pipeline on labelled broadcast clips and propagate the counting error into the correction.
 \end{enumerate}
 
 \noindent Our contributions are:
@@ -73,8 +79,10 @@ outperforms the common rectangular approximation and shows that camera operators
 (ii) the first measurement, to our knowledge, of visibility bias in pressing metrics, with confidence intervals that include
 stadium-to-stadium camera variation and a replication on a second data provider;
 (iii) the finding that the bias is almost fully explained by two quantities measurable on the broadcast, the number of
-visible players and camera lag, and a correction that removes most of it on held-out stadiums and matches; and
-(iv) an open-source implementation of the full pipeline.
+visible players and camera lag, and a correction that removes most of it on held-out stadiums and matches;
+(iv) a validation of that correction on real broadcast video. The visible-player count is measured with an open
+pipeline evaluated on SoccerNet-GSR, and its error is propagated into the corrected pressing value; and
+(v) an open-source implementation of the full pipeline.
 
 % ---------------------------------------------------------------------------------------------
 \section{Related Work}
@@ -114,6 +122,11 @@ matches; Metrica's anonymised teams provide an independent check.
 tracking of 20 A-League 2024/25 matches at 10\,Hz. For every frame it gives the four corners of the camera image
 projected onto the pitch, and for every player whether they were detected on screen or extrapolated. We use it only to
 fit and validate the camera model (375{,}357 frames for fitting).
+
+\textbf{Broadcast video.} SoccerNet-GSR~\cite{somers2024gsr} (GPL-3.0) contains 30-second main-camera clips from the
+Swiss Super League at 25\,Hz and 1920$\times$1080. Every frame labels each person's box, role, team, jersey number
+and pitch position. We train on the 57 training clips. We tune on half of the 58 validation clips and report on the
+other half and on the 49 test clips. No frames are reproduced in this paper.
 
 % ---------------------------------------------------------------------------------------------
 \section{Method}
@@ -268,6 +281,7 @@ The shared camera averages these lags away, which is why it shows a smaller carr
 in our initial rectangle experiments, overstates the carrier bias (Table~\ref{tab:bias}).
 
 \subsection{Correcting the bias}
+\label{sec:correction}
 
 Since the undercount of active pressers is nearly linear in the number of visible players, we correct a broadcast's
 value by fitting $\text{bias} = k \cdot \text{visible} + b$ across broadcasts and dividing by $1 + \text{bias}$. We
@@ -275,6 +289,108 @@ evaluate this strictly: for each of the 360 team-broadcasts (20 stadium cameras 
 the line is fitted without that stadium camera \emph{and} without that match. The correction reduces the mean absolute
 error from 21.8\% to 3.1\% (mean error $+0.0\%$; 95\% of broadcasts within $\pm 7.3\%$). The pooled slope is 4.1
 percentage points per visible player.
+
+% ---------------------------------------------------------------------------------------------
+\section{From Real Broadcast Video}
+\label{sec:video}
+
+The correction needs one number per broadcast: the mean number of visible players per frame, counting both teams and
+the goalkeepers but not the referees. So far this number came from the simulation. Here we measure it on real
+broadcast video and ask how much its error widens the corrected estimate.
+
+\subsection{Pipeline}
+
+\textbf{Detection and tracking.} An RF-DETR Medium detector~\cite{rfdetr} is fine-tuned on SoccerNet-GSR for people
+and the ball at 1120\,px. On validation it finds 95.8\% of people with 95.5\% precision. OC-SORT~\cite{cao2023ocsort}
+with camera-motion compensation~\cite{trackers} links the boxes into tracks (held-out HOTA~\cite{luiten2021hota} 0.65).
+
+\textbf{Teams and roles.} Teams come from per-clip $k$-means on the shirt colour of each track, using an (a,\,b)
+histogram in Lab space with grass and lightness removed. This reaches 94.5\% player accuracy on held-out clips.
+Tracks that fit neither team become goalkeepers inside a penalty area and referees elsewhere.
+
+\textbf{Pitch calibration.} A ResNet-34~\cite{he2016resnet} heatmap network detects 33 pitch landmarks; a RANSAC
+homography maps feet to the pitch. Its training labels cost nothing: a homography fitted to the labelled pitch
+positions of six or more people per frame projects the landmarks into the image. With at least six landmark inliers,
+the median player position error is 0.61\,m (90\% within 2\,m) in 85\% of frames. Over time, fits that disagree with
+their neighbours are dropped and gaps are filled by interpolation. This raises the share of frames with a homography
+from 80\% to 92\%.
+
+\textbf{Jersey numbers.} A pretrained scene-text recogniser (PARSeq~\cite{bautista2022parseq}) is fine-tuned on
+training crops in which it already reads some number, labelled with the track's number. One round of self-training
+follows: the fine-tuned model selects four times as many crops, and PARSeq is fine-tuned again. Each track takes the
+number its confident reads agree on. It reads the correct number for about half of the numbered tracks.
+
+\begin{table}[t]
+\centering
+\caption{End-to-end game state on SoccerNet-GSR test (49 clips), scored with the official evaluator. GS-HOTA matches
+a prediction to a labelled person only within 5\,m and with the same role, team and jersey number. The position-only
+score ignores the attributes and uses our implementation of the same similarity.}
+\label{tab:gsr}
+\begin{tabular}{lcc}
+\toprule
+Pipeline & GS-HOTA & Position only \\
+\midrule
+SoccerNet-GSR baseline~\cite{somers2024gsr} & 22.3 & 42.7 \\
+Ours, no jersey numbers & 24.0 & 62.3 \\
+Ours, with jersey numbers & \textbf{39.8} & 62.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{End to end.} Table~\ref{tab:gsr} shows that the pipeline reconstructs the game state well above the public
+baseline. On positions alone it gains almost 20 points; the remaining gap to the full score is mostly unread jersey
+numbers. For this paper, though, the relevant output is the count of visible players.
+
+\subsection{Counting visible players}
+
+We count, per frame, the tracked people whose role is player or goalkeeper. This count does not need the homography.
+Requiring a pitch position would lose every frame without one (10\%), which is why we do not use it here.
+
+\textbf{Error.} Against the labels, the pipeline undercounts by 1.05 players per frame [95\% CI 0.75, 1.41] on the
+held-out validation clips and by 0.72 [0.51, 0.95] on test. The intervals come from resampling whole clips. Clip
+means still follow the labels closely ($r = 0.95$ and $0.96$; Fig.~\ref{fig:video}a). Missed players are small or
+hidden in groups. The undercount is 0.58 in close shots and 1.35 in wide ones, and 1.75 when 19 or more players are
+on screen.
+
+\textbf{Calibration.} A linear calibration fitted on the tuning clips only removes the bias:
+$\text{labels} \approx 0.943 \cdot \text{count} + 1.52$. The residual is $-0.32$ [$-0.68$, $-0.01$] players on
+held-out validation and $+0.09$ [$-0.13$, $0.29$] on test.
+
+\subsection{The correction with the video count}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig4_real_video.pdf}
+\caption{(a) Visible players per 30-second clip: pipeline count after calibration vs.\ labels (SoccerNet-GSR,
+held-out validation and test). (b) Error in active pressers after correction for the 360 team-broadcasts, with the
+true visible-player mean, with the calibrated video count over a whole match or a single clip, and with the
+uncalibrated count. Boxes: interquartile range; whiskers: 2.5--97.5\%.}
+\label{fig:video}
+\end{figure}
+
+We add the measured count errors to the true visible-player mean of each of the 360 team-broadcasts. The errors are
+drawn from the 78 held-out validation and test clips, with 500 draws per broadcast. We then apply the same
+leave-camera-and-match-out correction as in Section~\ref{sec:correction}. A broadcast is a whole match, about 180 clips, so we average
+180 clip errors per draw. As a worst case we also use the error of a single clip.
+
+With the calibrated count over a whole match, the corrected error is as small as with the true count
+(Fig.~\ref{fig:video}b):
+\begin{itemize}
+\item mean absolute error 3.09\%, against 3.05\% with the true count;
+\item 95th percentile 7.27\%, against 7.29\%;
+\item every broadcast within $\pm 10\%$.
+\end{itemize}
+Without calibration, the undercount makes the correction overshoot: mean error $+4.7\%$, mean absolute error 5.2\%,
+95th percentile 11.3\%. That is still far better than no correction ($-21.8\%$). If the count comes from a single
+clip, the mean absolute error is 4.7\% and the 95th percentile 12.6\%. Each player of count error moves the corrected
+value by about 5--6\%.
+
+\textbf{Main-camera filter.} Replays and close-ups must not enter the count. We remove shots with little grass
+($<0.2$ of the frame) or very large players (median box over 300\,px). Shot boundaries are colour-histogram cuts, and
+each shot is kept or dropped as a whole. On the 80{,}250 SoccerNet-GSR frames, which are all main camera, this removes
+none. The margins are wide: no main-camera frame has a median player taller than 255\,px, and no two consecutive frames
+differ by more than 0.16, against 0.5 needed for a cut. A stricter grass threshold of 0.3 wrongly drops two sunlit
+clips with pale turf, which shows that grass colour is the fragile cue.
 
 % ---------------------------------------------------------------------------------------------
 \section{Discussion}
@@ -285,15 +401,22 @@ about one fifth on average and by up to 29\% for tightly framed broadcasts. Comp
 different camera styles can therefore be misleading.
 
 \textbf{Correction in practice.} The number of visible players can be counted on any broadcast, so the correction
-needs no full tracking at inference time. Our evaluation uses the exact number of visible players from the
-simulation; on real video, detection errors and replays will add noise. The correction targets a match-level mean;
-frame-level correction and correcting carrier pressure for camera lag are left for future work.
+needs no full tracking at inference time. On real video (Section~\ref{sec:video}), the pipeline's count is slightly
+too low. Once calibrated, it gives the same corrected accuracy as the true count over a whole match. The calibration
+matters: without it the correction overshoots by about 5\%. The correction targets a match-level mean. Applying it to
+short excerpts roughly doubles the 95th-percentile error. Frame-level correction and correcting carrier pressure for
+camera lag are left for future work.
 
 \textbf{Limitations.} The ground truth covers 9 matches from two sources, with one team in 5 of the 7 IDSSE matches.
 The camera is fitted on A-League broadcasts; other leagues may be filmed differently. SkillCorner's detection flags
 also reflect detector errors, which caps agreement at about 97\%. Per-stadium cameras are fitted and evaluated on the
-same match (the held-out test uses the shared camera). We simulate only the main camera; replays, close-ups and
-camera cuts are not modelled. Metrica possession is reconstructed from hand-annotated events.
+same match (the held-out test uses the shared camera). We simulate only the main camera. Our filter removes no
+main-camera frames, but SoccerNet-GSR contains no replays, so how many replays and close-ups it catches is not yet
+measured. The video experiments use one league (Swiss Super League) and 30-second clips. The count calibration is
+fitted on that data, and its transfer to other broadcasters is untested. The pressing ground truth and the video
+come from different matches: we validate the correction's input on video, not the corrected pressing value itself,
+because no open dataset has both broadcast video and full tracking of the same match. Metrica possession is
+reconstructed from hand-annotated events.
 
 % ---------------------------------------------------------------------------------------------
 \section{Conclusion}
@@ -302,7 +425,9 @@ Using a broadcast camera fitted to and validated on real footage, we showed that
 team's active pressers by about one fifth (22.6\% [19.8, 25.2]), robustly across matches, stadium cameras and a second
 data provider, while pressure on the ball carrier is nearly unbiased unless the camera lags. Both effects are almost
 fully explained by quantities measurable on the broadcast, and a correction based on the number of visible players
-reduces the error in active pressers from 21.8\% to 3.1\% on unseen stadiums and matches.
+reduces the error in active pressers from 21.8\% to 3.1\% on unseen stadiums and matches. On real broadcast video an
+open pipeline measures that number with a small, correctable undercount. With the calibrated video count the
+corrected error stays at 3.1\%, so the correction can be applied to broadcast footage directly.
 
 \subsubsection*{Data and code availability.}
 Code, fitted camera parameters and scripts to rebuild every table and figure: \cite{pitchlens}. Data are downloaded
