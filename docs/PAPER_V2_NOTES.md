@@ -27,12 +27,13 @@ from chat logs or Colab sessions. Update it after each step.
 | 17 | Self-training the number reader (round 2: 6,296 crops the round-1 reader sees a number in) | **official test GS-HOTA 39.77** (valid 41.63; DetA 26.47, AssA 59.76); numbered tracks read 55% (round 1: 32%) | `docs/results/phase2_a7_jersey.md` run 3; Drive `outputs/jersey/official_*_pitchlens_a7r3.txt`, `parseq_ft2.pt` |
 | 18 | B1: the pipeline counts visible players with a small, correctable undercount | raw -1.05 [-1.41,-0.75] (held-out) / -0.72 [-0.95,-0.51] (test) players per frame; after a calibration fitted on separate clips -0.32 [-0.68,-0.01] / +0.09 [-0.13,0.29] = -1.3 / +0.4 pp of pressing bias (correction error itself 3.1%); clip r 0.95-0.96; undercount grows with wide shots (-1.35) and crowds (-1.75 at 19+) | `docs/results/phase2_b1_visible_players.md`; Drive `outputs/b1_visible/` (figure without frames) |
 | 19 | B2: with the calibrated video count the correction is as good as with the true count | whole match: mean abs. error 3.09% (true count 3.05%), p95 7.27% (7.29%), 100% within +-10%; raw video count 5.19% / 11.31% (overshoot +4.7%); single 30-s clip 4.67% / 12.63%; about 5-6% per player of count error | `docs/results/phase2_b2_propagation.md`; laptop `outputs/b2_propagation/` (figure without frames) |
+| 20 | B3: a main-camera filter (grass share, player size, shot cuts) removes no main-camera frames | 0% of 80,250 SN-GSR frames dropped with grass >= 0.2, player <= 300 px, cut >= 0.5; main-camera margins: max player 255 px, max frame-to-frame change 0.16; stricter grass (0.3-0.4) wrongly drops 1.9-3.7% (sunny pale-turf stadium) with < 0.1 pp effect; recall on real replays not measurable on SN-GSR | `docs/results/phase2_b3_main_camera.md`; laptop `outputs/b3_shots/` |
 
 ## Still needed for the real-video section
 
 - ~~B1~~ done (row 18).
 - ~~B2~~ done (row 19).
-- **B3:** share of frames removed as replays or close-ups.
+- ~~B3~~ done (row 20; recall on real replays remains open).
 - **A6 follow-up:** re-score with the official SoccerNet evaluator; jersey numbers (A7).
 - One figure: real visible-player distribution (SN-GSR) against the simulated cameras.
 
