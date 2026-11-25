@@ -340,6 +340,93 @@ def _cmd_bias_correction(args: argparse.Namespace) -> None:
     print(f"Saved -> {out}")
 
 
+def _cmd_count_error(args: argparse.Namespace) -> None:
+    """B2: carry the pipeline's visible-player count error (B1) into the pressing correction (paper v1)."""
+    import json
+
+    import numpy as np
+
+    from pitchlens.analytics.propagation import (
+        clip_errors,
+        constant,
+        correlated,
+        independent,
+        propagate,
+        summarise,
+        zero,
+    )
+    from pitchlens.analytics.visible_count import fit_calibration
+
+    counts = pl.read_parquet(args.counts)
+    table = pl.read_csv(args.table).select("camera", "match_id", "pressing_team_name", "gt", "sim",
+                                           "players_visible", "bias")
+    cal = fit_calibration(counts.filter(pl.col("part") == "tune"))
+    raw_e, cal_e = clip_errors(counts), clip_errors(counts, calibration=cal)
+    n = args.draws
+    errs = {
+        "no correction": table["bias"].to_numpy()[None, :],
+        "corrected, true count (paper v1)": propagate(table, zero(), 1),
+        "corrected, video count raw, whole match": propagate(table, independent(raw_e, args.clips), n, args.seed),
+        "corrected, video count raw, one clip": propagate(table, correlated(raw_e), n, args.seed),
+        "corrected, video count calibrated, whole match": propagate(table, independent(cal_e, args.clips), n,
+                                                                    args.seed),
+        "corrected, video count calibrated, one clip": propagate(table, correlated(cal_e), n, args.seed),
+    }
+    summary = pl.DataFrame([{"scenario": k, **summarise(v)} for k, v in errs.items()])
+    sens = pl.DataFrame([{"count_error": float(e), **summarise(propagate(table, constant(e), 1))}
+                         for e in np.arange(-2.0, 2.01, 0.5)])
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    summary.write_csv(out / "b2_scenarios.csv")
+    sens.write_csv(out / "b2_sensitivity.csv")
+    (out / "b2_settings.json").write_text(json.dumps({
+        "calibration_a_b": cal, "broadcasts_rows": table.height, "draws": n, "clips_per_match": args.clips,
+        "seed": args.seed, "clips": len(raw_e),
+        "clip_error_raw": {"mean": float(raw_e.mean()), "sd": float(raw_e.std(ddof=1))},
+        "clip_error_calibrated": {"mean": float(cal_e.mean()), "sd": float(cal_e.std(ddof=1))}}, indent=2))
+    print(f"{len(raw_e)} held-out / test clips; count error per clip raw {raw_e.mean():+.2f} ± {raw_e.std(ddof=1):.2f},"
+          f" calibrated {cal_e.mean():+.2f} ± {cal_e.std(ddof=1):.2f} (calibration a={cal[0]:.3f}, b={cal[1]:.2f})")
+    with pl.Config(tbl_rows=20, tbl_cols=10, fmt_str_lengths=60, tbl_width_chars=200):
+        print(summary)
+        print(sens)
+    if not args.no_plot:
+        _plot_b2(errs, out)
+    print(f"Saved -> {out}")
+
+def _plot_b2(errs: dict, out: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    show = [("no correction", "#9aa0a6"), ("corrected, true count (paper v1)", "#2a6fdb"),
+            ("corrected, video count calibrated, whole match", "#1e8e3e"),
+            ("corrected, video count calibrated, one clip", "#e07b1a")]
+    labels = ["no correction", "corrected,\ntrue count", "corrected, video count\n(whole match)",
+              "corrected, video count\n(single clip)"]
+    fig, ax = plt.subplots(figsize=(8, 4.2))
+    data = [np.asarray(errs[k]).ravel() for k, _ in show]
+    parts = ax.violinplot(data, showextrema=False, widths=0.8)
+    for body, (_, c) in zip(parts["bodies"], show, strict=True):
+        body.set_facecolor(c)
+        body.set_alpha(0.6)
+    for i, d in enumerate(data, 1):
+        lo, med, hi = np.quantile(d, [0.025, 0.5, 0.975])
+        ax.plot([i, i], [lo, hi], c="#333", lw=1.2)
+        ax.scatter([i], [med], c="#333", s=14, zorder=3)
+    ax.axhline(0, c="#888", lw=1, ls="--")
+    ax.set_xticks(range(1, len(labels) + 1), labels)
+    ax.set_ylabel("error in active pressers (%)")
+    ax.set_title("Pressing correction with the visible-player count from real video")
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(out / "b2_propagation.png", dpi=150)
+    fig.savefig(out / "b2_propagation.pdf")
+    plt.close(fig)
+
+
 def _cmd_video(args: argparse.Namespace) -> None:
     """Broadcast clip -> per-frame pitch positions, roles and teams (CSV)."""
     import tempfile
@@ -431,6 +518,16 @@ def main(argv: list[str] | None = None) -> None:
     fc.add_argument("--per-match", action="store_true",
                     help="Fit one camera per match (stadium) instead of one shared camera")
     fc.set_defaults(func=_cmd_fit_camera)
+
+    ce = sub.add_parser("count-error-propagation", help="B2: count error from video -> corrected pressing error")
+    ce.add_argument("--counts", default="outputs/b1_visible/counts_tracks.parquet", help="B1 frame counts")
+    ce.add_argument("--table", default="outputs/correction/correction_per_broadcast.csv", help="Phase 1 broadcasts")
+    ce.add_argument("--draws", type=int, default=500, help="Draws of the count error per broadcast")
+    ce.add_argument("--clips", type=int, default=180, help="30-s clips per match (whole-match averaging)")
+    ce.add_argument("--seed", type=int, default=0)
+    ce.add_argument("--out", default="outputs/b2_propagation")
+    ce.add_argument("--no-plot", action="store_true")
+    ce.set_defaults(func=_cmd_count_error)
 
     vd = sub.add_parser("video", help="Broadcast clip -> pitch positions, roles and teams per frame")
     vd.add_argument("input", help="Video file, or a folder with img1/000001.jpg, ...")
