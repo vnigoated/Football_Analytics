@@ -530,6 +530,65 @@ def _cmd_cross_league(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2))
 
 
+def _cmd_replay_share(args: argparse.Namespace) -> None:
+    """Journal step 5: share of broadcast time that is not the live main camera, and the leak tolerance."""
+    import json
+
+    import numpy as np
+
+    from pitchlens.analytics.broadcast_shots import (
+        complete_games,
+        leak_shift,
+        load_all,
+        max_leak,
+        per_game,
+        time_shares,
+    )
+
+    shots_all = load_all(args.labels)
+    games = complete_games(shots_all)
+    shots = shots_all.filter(pl.col("game").is_in(games))
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"{shots_all['game'].n_unique()} games with camera labels, {len(games)} labelled throughout")
+    shares = time_shares(shots)
+    shares.write_csv(out / "time_shares.csv")
+    league = time_shares(shots, by=["league"])
+    league.write_csv(out / "time_shares_by_league.csv")
+    pg = per_game(shots)
+    pg.write_csv(out / "per_game.csv")
+    nonmain = 1 - pg["main_live"].to_numpy()
+    q = {k: float(np.quantile(nonmain, p)) for k, p in [("median", 0.5), ("p90", 0.9)]}
+    rows = []
+    for what, v_leak in [("close-up (0 players)", 0.0), ("close-up (3 players)", 3.0),
+                         ("wide non-main (8 players)", 8.0), ("main-camera replay (= live)", args.v_main)]:
+        for game, s in q.items():
+            rows.append({"leaked frames": what, "game": game, "non-main share": round(s, 3),
+                         "shift if all leak (pp)": round(leak_shift(s, 1.0, args.v_main, v_leak), 2),
+                         "shift at 10% leak (pp)": round(leak_shift(s, 0.1, args.v_main, v_leak), 2),
+                         f"max leak for {args.max_pp} pp": round(max_leak(s, args.v_main, v_leak, args.max_pp), 3)})
+    tol = pl.DataFrame(rows)
+    tol.write_csv(out / "leak_tolerance.csv")
+    summary = {
+        "games_with_labels": shots_all["game"].n_unique(), "games_complete": len(games),
+        "per_league_games": dict(pg.group_by("league").len().iter_rows()),
+        **{f"{c}_{s}": float(getattr(pg[c], s)()) for c in ("main_live", "replay", "main_replay", "close_up")
+           for s in ("mean", "median", "min", "max")},
+        "nonmain_shot_s_median": float(pg["nonmain_shot_s"].median()),
+        "v_main": args.v_main, "max_pp": args.max_pp,
+    }
+    (out / "replay_share_summary.json").write_text(json.dumps(summary, indent=2))
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=220, fmt_str_lengths=40):
+        print(shares.with_columns(pl.col("share").round(4), (pl.col("seconds") / 3600).round(1).alias("hours"))
+              .drop("seconds"))
+        print(pg.group_by("league").agg(games=pl.len(), main_live=pl.col("main_live").mean().round(3),
+                                        replay=pl.col("replay").mean().round(3),
+                                        main_replay=pl.col("main_replay").mean().round(3),
+                                        close_up=pl.col("close_up").mean().round(3)).sort("league"))
+        print(tol)
+    print(json.dumps(summary, indent=2))
+
+
 def _cmd_video(args: argparse.Namespace) -> None:
     """Broadcast clip -> per-frame pitch positions, roles and teams (CSV)."""
     import tempfile
@@ -642,6 +701,13 @@ def main(argv: list[str] | None = None) -> None:
     cl.add_argument("--dirs", nargs="+", default=["outputs/stadiums_gsr/idsse", "outputs/stadiums_gsr/metrica"])
     cl.add_argument("--out", default="outputs/cross_league")
     cl.set_defaults(func=_cmd_cross_league)
+
+    rs = sub.add_parser("replay-share", help="Journal step 5: non-main-camera share of broadcasts, leak tolerance")
+    rs.add_argument("--labels", default="data/SN-Labels")
+    rs.add_argument("--v-main", type=float, default=14.0, help="Visible players on live main-camera frames")
+    rs.add_argument("--max-pp", type=float, default=1.0, help="Tolerated shift of the corrected value (pp)")
+    rs.add_argument("--out", default="outputs/s5_replays")
+    rs.set_defaults(func=_cmd_replay_share)
 
     tr = sub.add_parser("team-robustness", help="Journal step 1: is the pressing bias driven by one team?")
     tr.add_argument("--table", default="outputs/correction/correction_per_broadcast.csv")
