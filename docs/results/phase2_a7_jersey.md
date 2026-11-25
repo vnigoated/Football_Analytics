@@ -117,3 +117,47 @@ Outputs (Drive `outputs/jersey/`):
 - `probs_valid/` and `probs_test/` (per-crop number probabilities);
 - `vote_tune.csv`, `gs_hota_a7.csv`, `settings.json`;
 - `official_{valid,test}_{pitchlens_a6,pitchlens_a7}.txt`.
+
+## Run 2 (2026-11-25, Colab A100): PARSeq
+
+**Crop.** Only where the number sits: rows 12–50% of the box plus 5% of the width on each side, at the original
+resolution, letterboxed to 128 × 32.
+
+**Readers compared on the same tracks.**
+1. Run 1's ResNet-34.
+2. PARSeq as is (pretrained only).
+3. PARSeq fine-tuned for 3 epochs (loss 1.24 → 0.76), only on train crops where the pretrained PARSeq read *some*
+   number with confidence ≥ 0.5. These are **1,507 of 101,169 crops (1.5%)**; it was already right on 54% of them.
+
+**Reader alone** (labelled player tracks, valid held-out half, 564 tracks, vote with at least 2 crops):
+
+| Reader | min_conf | Track right | Numbered tracks read right | Wrong number given |
+|---|---|---|---|---|
+| ResNet-34 (run 1) | 0.7 | 0.220 | 0.200 | 0.617 |
+| PARSeq pretrained | 0.3 | 0.170 | 0.056 | 0.142 |
+| **PARSeq fine-tuned** | **0.3** | **0.404** | **0.319** | 0.186 |
+| PARSeq fine-tuned | 0.5 | 0.390 | 0.290 | 0.062 |
+
+- **The pretrained PARSeq barely reads numbers.** It reads sponsor text ("COMPANY", "SPART") or single strokes. The
+  crops are small and blurred, and front views show the sponsor rather than the number.
+- **1,500 football crops are enough to change that.** The fine-tuned model reads 1.6× as many numbers as run 1, with
+  a third of the wrong numbers.
+
+**Vote** (tuning half, GS-HOTA):
+
+| Reader | Best GS-HOTA | min_conf | min_votes |
+|---|---|---|---|
+| ResNet-34 | 27.61 | 0.9 | 2 |
+| PARSeq pretrained | 25.30 | 0.3 | 1 |
+| **PARSeq fine-tuned** | **34.92** | **0.3** | **2** |
+
+**GS-HOTA (our implementation, official rules):**
+
+| Reader | Valid held-out half | All valid | Test |
+|---|---|---|---|
+| ResNet-34 (run 1) | 28.16 | 27.89 | 29.92 |
+| PARSeq pretrained | 27.56 | 26.47 | 26.28 |
+| **PARSeq fine-tuned** | **35.96** | **35.46** | **34.83** |
+
+Official evaluator: the COMBINED rows are in Drive `outputs/jersey/official_{valid,test}_pitchlens_a7r2.txt`. The
+run printed only the first clip's row; the notebook now prints the COMBINED row.
