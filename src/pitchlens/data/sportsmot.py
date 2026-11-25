@@ -11,6 +11,7 @@ the definition of "visible players" used by the correction.
 
 from __future__ import annotations
 
+import io
 import tarfile
 from collections.abc import Iterable
 from pathlib import Path
@@ -23,8 +24,10 @@ GT_COLUMNS = ["frame", "id", "x", "y", "w", "h", "conf", "cls", "vis"]
 def read_gt(seq_dir: str | Path) -> pl.DataFrame:
     """``gt/gt.txt`` as a table: frame, id, x, y, w, h (pixels)."""
     p = Path(seq_dir) / "gt" / "gt.txt"
-    n_cols = len(p.read_text().split("\n", 1)[0].split(","))
-    df = pl.read_csv(p, has_header=False, new_columns=GT_COLUMNS[:n_cols])
+    text = p.read_text().replace(" ", "").replace("\t", "")  # SportsMOT writes ", " between values
+    n_cols = len(text.split("\n", 1)[0].split(","))
+    df = pl.read_csv(io.StringIO(text), has_header=False, new_columns=GT_COLUMNS[:n_cols],
+                     schema_overrides=dict.fromkeys(GT_COLUMNS[:n_cols], pl.Float64))
     return df.select(pl.col("frame").cast(pl.Int64), pl.col("id").cast(pl.Int64),
                      *[pl.col(c).cast(pl.Float64) for c in ("x", "y", "w", "h")])
 

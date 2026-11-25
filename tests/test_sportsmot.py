@@ -8,7 +8,7 @@ def write_clip(root, name="v_abc_c001"):
     d = root / name
     (d / "gt").mkdir(parents=True)
     (d / "img1").mkdir()
-    rows = ["1,1,10,20,30,60,1,1,1", "1,2,50,20,30,80,1,1,1", "2,1,12,20,30,62,1,1,1"]
+    rows = ["1, 1, 10, 20, 30, 60, 1, 1, 1", "1, 2, 50.5, 20, 30, 80, 1, 1, 1", "2,1,12,20,30,62,1,1,1"]
     (d / "gt" / "gt.txt").write_text("\n".join(rows) + "\n")
     return d
 
