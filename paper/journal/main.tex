@@ -426,10 +426,12 @@ correction moved by 0.3 percentage points on average (at most 0.6) instead of 7.
 mostly main-camera replays and wide views, whose people counts match live play, so the count was unchanged although
 10\% of the non-main frames were kept. On SoccerNet-GSR the stricter filter removed 1.2\% of the frames.
 
-\begin{table}
-\tbl{Main-camera filter on eight full broadcasts (85{,}117 labelled frames). Shift: change of the corrected pressing
-value caused by the frames the filter keeps; held out: thresholds tuned on the other seven broadcasts.}
-{\begin{tabular}{lcc}
+\begin{table}[t]
+\centering
+\caption{Main-camera filter on eight full broadcasts (85{,}117 labelled frames). Shift: change of the corrected
+pressing value caused by the frames the filter keeps; held out: thresholds tuned on the other seven broadcasts.}
+\label{tab:filter}
+\begin{tabular}{lcc}
 \toprule
  & Default filter & Broadcast filter \\
 \midrule
@@ -442,8 +444,7 @@ People count on kept frames vs live play & $-1.72$ & $+0.01$ \\
 Shift, all broadcasts (pp) & $-7.1$ & $+0.03$ \\
 Shift per broadcast, held out: mean $|\cdot|$ (max) (pp) & -- & 0.3 (0.6) \\
 \bottomrule
-\end{tabular}}
-\label{tab:filter}
+\end{tabular}
 \end{table}
 
 % =============================================================================================
