@@ -23,8 +23,7 @@ README = """How to compile (Overleaf)
    upload the 5 PDFs into it.
 4. Menu -> Main document: main.tex. Compiler: pdfLaTeX. Recompile.
 
-Red [TODO: ...] marks are still open: journal step 6 (replay filter), funding statement, Zenodo DOI.
-Line numbers are for review; remove \\linenumbers only for a reading copy.
+No TODOs are left. Line numbers are off; uncomment \\linenumbers in main.tex if the journal asks for them.
 """
 
 root = Path(__file__).parent
