@@ -5,6 +5,7 @@
 % Red TODOs are filled after journal step 6 and before submission.
 \documentclass[]{interact}
 
+\usepackage{graphicx}
 \usepackage{epstopdf}
 \usepackage[caption=false]{subfig}
 \usepackage[natbibapa,nodoi]{apacite}
@@ -38,13 +39,12 @@ players at a time. In this simulation-based measurement study, we quantified how
 to correct it. Using optical tracking of 10 professional matches (two providers, 14 teams), we hid every player a
 broadcast camera would not show and recomputed pressing intensity. The camera was fitted to 20 real broadcasts and
 validated on held-out matches (87.1\% per-player agreement). Averaged over 20 stadium cameras, broadcast tracking
-undercounted a team's active pressers by 22.6\% (95\% CI 19.8 to 25.2) and 20.2\% (17.1 to 23.2) in the two
-datasets, and every team was undercounted (18--28\%). The undercount was almost fully explained by the number of
+undercounted a team's active pressers by 22.6\% (95\% CI 19.8--25.2) and 20.2\% (17.1--23.2) in the two datasets, and every team was undercounted (18--28\%). The undercount was almost fully explained by the number of
 visible players ($r = 0.98$; about 4 percentage points per player), whereas pressure on the ball carrier was nearly
 unbiased unless the camera lagged. A visible-player correction reduced the mean absolute
 error from 21.9\% to 3.0\% when the stadium camera and match were held out, and to 4.7\% for a second league's cameras
-within the fitted visibility range. On real broadcast video, an open pipeline counted visible players to within
-half a player on two independent datasets, keeping the corrected error at 3.0--3.6\% over a match. Only 64\%
+within the fitted visibility range. On real video, an open pipeline counted visible players within half a player
+on two independent datasets, keeping the corrected error at 3.0--3.6\% over a match. Only 64\%
 of broadcast time shows the live main camera, but filtering out close-ups kept the correction within 1 percentage
 point on eight held-out full broadcasts. Team-wide pressing metrics from
 broadcast data should be corrected, or compared only between similarly framed broadcasts.
@@ -404,27 +404,23 @@ count. Boxes: interquartile range; whiskers: 2.5--97.5\%.}
 \end{figure}
 
 \textbf{The correction with the video count.} With the calibrated SoccerNet-GSR count over a whole match, the corrected
-error was as small as with the true count (Figure~\ref{fig:video}b; mean absolute error 3.0\% for both, 95th
-percentile 7.1\% against 7.0\%). Without calibration the correction overshot (mean error $+4.7\%$). From a single 30-second clip the mean absolute error was 4.6\% (95th percentile 12.6\%). With
-the count errors measured on SportsMOT, the whole-match error was 3.3\% (raw count) to 3.6\% (calibrated), with
-95th percentiles of 8.0--8.7\%.
+error equalled that with the true count (Figure~\ref{fig:video}b; mean absolute error 3.0\%). Without calibration it
+overshot (mean error $+4.7\%$); from a single 30-second clip it was 4.6\%. With SportsMOT's count errors, the
+whole-match error was 3.3--3.6\%.
 
-\textbf{Broadcast composition and the main-camera filter.} In the 196 fully labelled broadcasts (297 hours), the
-live main camera made up 64\% of broadcast time (50--74\% per game), close-ups 29\%,
-replays 8\% and main-camera replays 1.9\% (at most 5.1\%). The six competitions were similar (live main camera
-57--67\%). Main-camera replays show players as live play does, so they do not bias the count. Close-ups do: if all
-non-main frames entered the count, the correction would move by 9--24 percentage points. To stay within 1 percentage
-point, the filter must remove about 97\% or more of the non-main frames (Figure~\ref{fig:generalisation}b). On the
-80{,}250 SoccerNet-GSR frames, which are all main camera, the filter removed none.
+\textbf{Broadcast composition and the main-camera filter.} In the 196 fully labelled broadcasts, the live main camera
+made up 64\% of broadcast time (50--74\% per game; 57--67\% per competition), close-ups 29\% and main-camera replays
+1.9\%. Main-camera replays show players as live play does; close-ups do not, and if all non-main frames entered the
+count, the correction would move by 9--24 percentage points. To stay within 1 percentage point, the filter must remove
+about 97\% of the non-main frames (Figure~\ref{fig:generalisation}b).
 
-On eight full broadcasts, however, this filter was not strict enough (Table~\ref{tab:filter}). It kept 42\% of the
-non-main frames, including 39\% of the close-ups: the detector, trained on wide views, often found no one in a
-close-up, and such frames passed the size test. The correction would move by $-7.1$ percentage points ($-3.0$ to
-$-11.6$ per broadcast). Requiring at least one detected person of at most 200\,px, a grass share of at least 0.15 and
-decisions per frame removed 93\% of the close-ups and 1.7\% of the live main-camera frames, and every
-leave-one-broadcast-out fold chose this setting. On the held-out broadcasts the correction moved by 0.3 percentage
-points on average (at most 0.6). The non-main frames that still passed were mostly main-camera replays and wide views,
-whose people counts match live play. On SoccerNet-GSR the stricter filter removed 1.2\% of the frames.
+The default filter removed no frame of SoccerNet-GSR, which is all main camera, but on eight full broadcasts it kept
+42\% of the non-main frames (Table~\ref{tab:filter}): the detector, trained on wide views, often found no one in a
+close-up, and such frames passed the size test. The correction would move by $-7.1$ percentage points. Requiring at
+least one detected person of at most 200\,px, a grass share of at least 0.15 and decisions per frame removed 93\% of
+the close-ups and 1.7\% of the live main-camera frames; every leave-one-broadcast-out fold chose this setting, and the
+held-out correction moved by 0.3 percentage points on average (at most 0.6). The frames that still passed were mostly
+main-camera replays and wide views, whose counts match live play. On SoccerNet-GSR this filter removed 1.2\% of frames.
 
 \begin{table}[t]
 \centering
@@ -450,26 +446,22 @@ Shift per broadcast, held out: mean $|\cdot|$ (max) (pp) & -- & 0.3 (0.6) \\
 % =============================================================================================
 \section{Discussion}
 
-Broadcast tracking undercounted team-wide pressing by about one fifth. The result held across 10 matches, 14 teams,
-two tracking providers, 20 stadium cameras and the cameras of a second league. Carrier-centred pressing was nearly
-unbiased unless the camera lagged. The size of the undercount was not a property of teams. It depended on how tightly
-the broadcast was framed: each additional visible player reduced it by about 4 percentage points. Both drivers can be
+Broadcast tracking undercounted team-wide pressing by about one fifth across 10 matches, 14 teams, two tracking
+providers, 20 stadium cameras and a second league's cameras. The undercount was not a property of teams but of how
+tightly the broadcast was framed, and carrier-centred pressing was biased only by camera lag. Both drivers can be
 measured on the broadcast itself.
 
-\textbf{Practical implications.} Analysts using broadcast-derived tracking should treat team-wide pressing counts,
-such as the number of players involved in a press, as systematically low. Comparing teams or matches filmed with
-different camera styles can mislead: a tightly framed broadcast (about 12 visible players) undercounts by about 29\%,
-a wide one (about 16) by about 13\%. Carrier-centred metrics can be used with small error. When the camera lags,
-however, they also become biased, by about 3\% at 0.2\,s of lag.
+\textbf{Practical implications.} Analysts should treat team-wide pressing counts from broadcast tracking, such as the
+number of players involved in a press, as systematically low. Comparing teams or matches filmed with different camera
+styles can mislead: a tightly framed broadcast (about 12 visible players) undercounts by about 29\%, a wide one (about
+16) by about 13\%. Carrier-centred metrics can be used with small error unless the camera lags (about 3\% at 0.2\,s).
 
-\textbf{Applying the correction.} The correction needs only the mean number of visible players over the match.
-For example, a broadcast showing 12.5 players on average has a predicted bias of
-$4.12 \times 12.5 - 79.3 = -27.8\%$. An observed 3.0 active pressers per frame then corresponds to
-$3.0 / (1 - 0.278) \approx 4.2$. The count can come from any broadcast with an open pipeline, provided that close-ups
-are filtered out first. The correction should be used within the visibility range it was fitted on (about 12--17
-players). Below it, the bias grows faster than linearly and the correction under-corrects. The count is accurate to
-about $\pm 0.5$ players across datasets, which adds less than one percentage point to the corrected error over a
-whole match. Short excerpts are much noisier, and the correction targets match-level means.
+\textbf{Applying the correction.} The correction needs only the mean number of visible players over the match. For
+example, a broadcast showing 12.5 players on average has a predicted bias of $4.12 \times 12.5 - 79.3 = -27.8\%$, so an
+observed 3.0 active pressers per frame corresponds to $3.0 / (1 - 0.278) \approx 4.2$. The count can come from an open
+pipeline once close-ups are filtered out, and its uncertainty ($\pm 0.5$ players) adds less than one percentage point
+over a whole match. The correction should be used within the fitted visibility range (about 12--17 players), below
+which it under-corrects, and for match-level means rather than short excerpts.
 
 \textbf{Relation to previous work.} Imputing off-screen players \citep{omidshafiei2022graphimputer,offscreen2026}
 targets individual positions and needs a trained model. Our correction targets the aggregate metric directly and
@@ -553,12 +545,12 @@ their data openly available.
 \section{Statistical output}
 \label{app:stats}
 
-\begin{table}[h]
+\begin{table}[ht]
 \centering
 \caption{Fitted models. Intervals are 95\% percentile bootstrap intervals; the resampling unit is given per row.}
 \label{tab:models}
 \small
-\begin{tabular}{p{4.2cm}p{4.6cm}p{2.0cm}p{2.6cm}}
+\begin{tabular}{p{3.4cm}p{3.9cm}p{1.9cm}p{2.6cm}}
 \toprule
 Model & Estimate [95\% CI] & Fit & Data, resampling \\
 \midrule
@@ -576,15 +568,16 @@ Count calibration: labels on count & $a = 0.943$, $b = 1.52$ & -- & 29 SoccerNet
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[ht]
 \centering
-\caption{Bias of active pressers per pressing team over the 20 stadium cameras, and the corrected error with the
-camera and match held out.}
+\caption{Bias of active pressers per pressing team: mean and range over the 20 stadium cameras, and the mean absolute
+error after correction with the camera and match held out (all values in \%).}
 \label{tab:teams}
 \small
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
-Pressing team & Matches & Mean bias (\%) & Range over cameras (\%) & Corrected MAE (\%) \\
+Pressing team & Matches & Mean bias & Range over cameras & Corrected MAE \\
 \midrule
 SSV Jahn Regensburg & 1 & $-27.9$ & $-34.7$ to $-17.6$ & 5.9 \\
 FC St.\ Pauli & 1 & $-24.6$ & $-30.3$ to $-15.5$ & 2.3 \\
@@ -601,29 +594,34 @@ VfL Bochum 1848 & 1 & $-18.5$ & $-23.3$ to $-9.9$ & 5.8 \\
 Metrica games 1--2, away & 2 & $-18.4$ & $-25.5$ to $-8.2$ & 2.0 \\
 FC Bayern M\"unchen & 1 & $-17.8$ & $-23.4$ to $-9.8$ & 6.3 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[ht]
 \centering
-\caption{Main-camera filter per broadcast. Default: the B3 filter on all frames. Broadcast filter: thresholds tuned
-on the other seven broadcasts (held out). Shift: change of the corrected pressing value (percentage points).}
+\caption{Main-camera filter per broadcast. Default filter: the filter of the Methods (grass share at least 0.2,
+median person at most 300\,px, whole shots). Broadcast filter: thresholds tuned on the other seven broadcasts and
+scored on this one (held out). Shift: change of the corrected pressing value in percentage points. EPL: Premier
+League; UCL: Champions League.}
 \label{tab:filter-games}
 \small
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{llcccc}
 \toprule
-Competition & Match & Shift, default & Live main removed & Non-main kept & Shift, held out \\
+ & & Default filter & \multicolumn{3}{c}{Broadcast filter (held out)} \\
+\cmidrule(lr){3-3}\cmidrule(lr){4-6}
+League & Match & Shift & Live main removed & Non-main kept & Shift \\
 \midrule
-Premier League & Manchester United 4--1 Leicester & $-6.5$ & 1.8\% & 12.0\% & $+0.07$ \\
-Premier League & Swansea 1--2 Liverpool & $-5.6$ & 0.9\% & 11.4\% & $+0.60$ \\
-Champions League & Manchester City 3--1 Barcelona & $-11.6$ & 1.8\% & 11.6\% & $-0.27$ \\
+EPL & Manchester United 4--1 Leicester & $-6.5$ & 1.8\% & 12.0\% & $+0.07$ \\
+EPL & Swansea 1--2 Liverpool & $-5.6$ & 0.9\% & 11.4\% & $+0.60$ \\
+UCL & Manchester City 3--1 Barcelona & $-11.6$ & 1.8\% & 11.6\% & $-0.27$ \\
 Ligue 1 & Paris SG 3--0 Metz & $-9.3$ & 2.8\% & 18.0\% & $-0.42$ \\
 Bundesliga & Bayern Munich 5--1 Wolfsburg & $-6.7$ & 1.3\% & 7.8\% & $+0.19$ \\
 Serie A & AS Roma 2--0 Empoli & $-8.7$ & 2.2\% & 8.5\% & $+0.43$ \\
 La Liga & Real Madrid 3--2 Valencia & $-3.7$ & 1.6\% & 4.9\% & $-0.27$ \\
 La Liga & Dep.\ La Coru\~na 0--2 Real Madrid & $-3.0$ & 1.3\% & 5.0\% & $+0.13$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \end{document}
