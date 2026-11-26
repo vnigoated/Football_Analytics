@@ -135,6 +135,38 @@ def filter_report(frames: pl.DataFrame, slope: float = 4.1) -> tuple[pl.DataFram
     return by_group, per_game, game_stats(f)
 
 
+def tune_filter_logo(frames: pl.DataFrame, settings: list[dict], apply, max_live_removed: float = 0.05,
+                     slope: float = 4.1) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Choose filter settings leaving one game out (journal step 6).
+
+    ``apply(frames, **setting)`` must return ``frames`` with a ``main`` column. For each held-out game, the setting
+    with the smallest mean |shift_pp| over the other games is chosen, among those that remove at most
+    ``max_live_removed`` of their live main-camera frames, and scored on the held-out game. Returns the grid
+    (all games) and the held-out table.
+    """
+    res = []
+    for kw in settings:
+        _, pg, s = filter_report(apply(frames, **kw), slope)
+        res.append((kw, pg, s))
+    keys = ("main_live_removed", "nonmain_kept", "count_shift", "shift_pp")
+    grid = pl.DataFrame([{**kw, **{k: s[k] for k in keys}} for kw, _, s in res])
+    rows = []
+    for test in sorted(frames["game"].unique()):
+        best, score = None, float("inf")
+        for kw, pg, _ in res:
+            tr = pg.filter(pl.col("game") != test)
+            if tr["main_live_removed"].mean() > max_live_removed:
+                continue
+            sc = tr["shift_pp"].abs().mean()
+            if sc < score:
+                best, score = (kw, pg), sc
+        if best is None:
+            raise ValueError("no setting keeps enough live main-camera frames")
+        te = best[1].filter(pl.col("game") == test).row(0, named=True)
+        rows.append({"game": test, **best[0], **{k: te[k] for k in keys}})
+    return grid, pl.DataFrame(rows)
+
+
 def leak_shift(nonmain_share: float, leak: float, v_main: float, v_leak: float, slope: float = 4.1) -> float:
     """Shift of the corrected pressing value (pp) when a fraction ``leak`` of the non-main frames is kept."""
     kept_leak = leak * nonmain_share

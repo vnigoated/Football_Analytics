@@ -34,18 +34,19 @@ correction validated on real broadcast video}
 
 \begin{abstract}
 Broadcast-derived tracking data is widely available, but the main camera shows only about 14 of the 22
-players at a time. We quantified how this partial view biases pressing metrics and how to correct it. Using optical
+players at a time. We quantified how this biases pressing metrics and how to correct it. Using optical
 tracking of 10 professional matches from two providers (14 teams), we hid every player a broadcast camera would not
-show and recomputed pressing intensity. The camera was fitted to the on-pitch footprints of 20 real broadcasts and
+show and recomputed pressing intensity. The camera was fitted to 20 real broadcasts and
 validated on held-out matches (87.1\% per-player agreement). Averaged over 20 stadium cameras, broadcast tracking
 undercounted a team's active pressers by 22.6\% (95\% CI 19.8 to 25.2) and 20.2\% (17.1 to 23.2) in the two
 datasets, and every team was undercounted (18--28\%). The undercount was almost fully explained by the number of
 visible players ($r = 0.98$; about 4 percentage points per player), whereas pressure on the ball carrier was nearly
-unbiased unless the camera lagged. A correction based on the number of visible players reduced the mean absolute
+unbiased unless the camera lagged. A visible-player correction reduced the mean absolute
 error from 21.9\% to 3.0\% when the stadium camera and match were held out, and to 4.7\% for a second league's cameras
-within the fitted visibility range. On real broadcast video, an open pipeline counted visible players to within about
-half a player on two independent datasets, keeping the corrected error at 3.0--3.6\% over a match. Because only 64\%
-of broadcast time shows the live main camera, close-ups must be filtered out first. Team-wide pressing metrics from
+within the fitted visibility range. On real broadcast video, an open pipeline counted visible players to within
+half a player on two independent datasets, keeping the corrected error at 3.0--3.6\% over a match. Only 64\%
+of broadcast time shows the live main camera, but filtering out close-ups kept the correction within 1 percentage
+point on eight held-out full broadcasts. Team-wide pressing metrics from
 broadcast data should be corrected, or compared only between similarly framed broadcasts.
 \end{abstract}
 
@@ -190,6 +191,13 @@ colour-histogram cuts, and each shot is kept or dropped as a whole. From the Soc
 share of broadcast time per camera type. On 203 games we verified that a label describes the shot ending at its
 timestamp: at shots on target and goals, 99\% of labels read this way are the live main camera. We then derived how
 many non-main frames the filter may let through before the correction moves by more than 1 percentage point.
+Finally, we tested the filter on eight full broadcasts from six competitions (SoccerNet raw videos, 720p at 2 frames
+per second, 86{,}400 frames), scoring every frame against its camera label. People were detected on every second
+frame. We report the share of each camera type removed and the shift of the mean people count on the kept frames
+relative to the live main-camera frames, converted to percentage points with the slope of 4.1. We then tuned the
+thresholds (grass share, box height, shot voting, and whether frames without detected people pass) leaving one
+broadcast out: the setting with the smallest mean shift on seven broadcasts, removing at most 5\% of their live
+main-camera frames, was scored on the eighth. Only aggregate statistics left the processing runtime.
 
 \subsection{Statistics}
 Frames 40\,ms apart are strongly dependent, so we used a block bootstrap with 60\,s blocks within each team-match.
@@ -405,8 +413,38 @@ replays 8\% and main-camera replays 1.9\% (at most 5.1\%). The six competitions 
 non-main frames entered the count, the correction would move by 9--24 percentage points. To stay within 1 percentage
 point, the filter must remove about 97\% or more of the non-main frames (Figure~\ref{fig:generalisation}b). On the
 80{,}250 SoccerNet-GSR frames, which are all main camera, the filter removed none. No main-camera frame had a median
-person taller than 255\,px, against the 300\,px threshold. \todo{Step 6: share of replay and close-up frames removed
-on full SoccerNet broadcasts (SoccerNet\_raw\_HQ, access requested).}
+person taller than 255\,px, against the 300\,px threshold.
+
+On eight full broadcasts, however, this filter was not strict enough (Table~\ref{tab:filter}). It removed only 1.2\%
+of the live main-camera frames, but kept 42\% of the non-main frames, including 40\% of the close-ups. The detector,
+trained on wide views, often found no one in a close-up, and such frames passed the size test. The mean people count
+on the kept frames fell by 1.7, which would move the correction by $-7.1$ percentage points ($-3.0$ to $-11.6$ per
+broadcast). Requiring at least one detected person of at most 200\,px, with a grass share of at least 0.15 and
+decisions per frame, removed 93\% of the close-ups, 97\% of crowd shots and 62\% of views behind the goal, and 1.7\%
+of the live main-camera frames. Every leave-one-broadcast-out fold chose this setting. On the held-out broadcasts the
+correction moved by 0.3 percentage points on average (at most 0.6) instead of 7.1. The frames that still passed were
+mostly main-camera replays and wide views, whose people counts match live play, so the count was unchanged although
+10\% of the non-main frames were kept. On SoccerNet-GSR the stricter filter removed 1.2\% of the frames.
+
+\begin{table}
+\tbl{Main-camera filter on eight full broadcasts (85{,}117 labelled frames). Shift: change of the corrected pressing
+value caused by the frames the filter keeps; held out: thresholds tuned on the other seven broadcasts.}
+{\begin{tabular}{lcc}
+\toprule
+ & Default filter & Broadcast filter \\
+\midrule
+Live main camera removed & 1.2\% & 1.7\% \\
+Close-ups removed (27\% of frames) & 61\% & 93\% \\
+Views behind the goal removed (3\%) & 36\% & 62\% \\
+Main-camera replays removed (3\%) & 9\% & 10\% \\
+Non-main frames kept & 42\% & 10\% \\
+People count on kept frames vs live play & $-1.72$ & $+0.01$ \\
+Shift, all broadcasts (pp) & $-7.1$ & $+0.03$ \\
+Shift per broadcast, held out: mean $|\cdot|$ (max) (pp) & -- & 0.3 (0.6) \\
+\bottomrule
+\end{tabular}}
+\label{tab:filter}
+\end{table}
 
 % =============================================================================================
 \section{Discussion}
@@ -453,7 +491,10 @@ hand-annotated events.
 $\pm 0.5$ players rather than a single calibration.
 \item \emph{Broadcast era.} The labelled broadcasts are from 2014--2017, and current broadcasts may be composed
 differently.
-\item \emph{Replay filter.} \todo{Update after step 6.}
+\item \emph{Replay filter.} It was tuned and tested on eight broadcasts from 2015--2017 with our detector at 2
+frames per second. It keeps most main-camera replays, which is harmless for the count but would matter for metrics
+that must not count an action twice. Other broadcasters, or a detector that finds people in close-ups, may need the
+thresholds re-tuned with the same procedure.
 \end{itemize}
 
 % =============================================================================================
@@ -464,7 +505,8 @@ broadcasts, while pressure on the ball carrier is nearly unbiased unless the cam
 fully explained by the number of visible players. A correction based on that number reduces the error from 21.9\% to
 3.0\% on unseen stadiums and matches, and to about 5\% on another league's cameras within the fitted visibility
 range. On real broadcast video, the number of visible players can be measured to within about half a player, which
-keeps the corrected error at 3--4\% over a whole match. Team-wide pressing metrics from broadcast data should be
+keeps the corrected error at 3--4\% over a whole match, provided close-ups are filtered out, which a simple filter
+did on eight full broadcasts to within 1 percentage point. Team-wide pressing metrics from broadcast data should be
 corrected, or compared only between broadcasts with similar framing.
 
 \section*{Disclosure statement}
@@ -476,7 +518,9 @@ No potential conflict of interest was reported by the author.
 \section*{Data availability statement}
 Code, fitted camera parameters and scripts to rebuild every table and figure are openly available
 \citep{pitchlens}. \todo{Add the Zenodo DOI of the release.} All data are downloaded from their original sources
-(IDSSE, Metrica Sports, SkillCorner, SoccerNet, SportsMOT) and are not redistributed.
+(IDSSE, Metrica Sports, SkillCorner, SoccerNet, SportsMOT) and are not redistributed. The full SoccerNet broadcast
+videos are available from the SoccerNet team under a non-disclosure agreement; only aggregate statistics derived from
+them are reported.
 
 \section*{Acknowledgement(s)}
 We thank IDSSE (Bassek et al.), Metrica Sports, SkillCorner, the SoccerNet team and the SportsMOT authors for making

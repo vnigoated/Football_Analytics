@@ -68,13 +68,21 @@ def person_size(tracks: pl.DataFrame) -> pl.DataFrame:
             .agg(pl.col("h").median().alias("box_height"), pl.len().alias("people")))
 
 
+# Journal step 6: chosen by leave-one-game-out on 8 full SoccerNet broadcasts (every fold picked it). Per-frame
+# decisions: at 2 fps a shot vote merges close-ups into the main shots around them.
+BROADCAST = {"grass_min": 0.15, "box_max": 200.0, "shot_vote": False, "no_people_ok": False}
+
+
 def main_view(features: pl.DataFrame, grass_min: float = 0.2, box_max: float = 300.0, cut_min: float = 0.5,
-              shot_vote: bool = True) -> pl.DataFrame:
+              shot_vote: bool = True, no_people_ok: bool = True) -> pl.DataFrame:
     """Add ``shot`` (a new shot starts where ``cut >= cut_min``) and ``main`` (True = keep).
 
     A frame looks like the main camera if its grass share is at least ``grass_min`` and the median tracked person is
-    at most ``box_max`` px tall (frames without people pass the size test). With ``shot_vote`` a whole shot takes
-    the majority decision of its frames.
+    at most ``box_max`` px tall. Frames without people pass the size test when ``no_people_ok``, and fail it
+    otherwise. With ``shot_vote`` a whole shot takes the majority decision of its frames.
+
+    The defaults are B3's (main-camera clips). For full broadcasts use ``BROADCAST`` (journal step 6): on 8 SoccerNet
+    broadcasts the detector often finds nobody in a close-up, so B3 kept 40% of the close-ups.
 
     Defaults from B3 run 1 (SN-GSR, main camera only):
     - Grass share is at least 0.21 in 99% of frames, but a sunny stadium with hard shadows and pale turf falls to
@@ -85,7 +93,8 @@ def main_view(features: pl.DataFrame, grass_min: float = 0.2, box_max: float = 3
     f = features.sort("frame").with_columns(
         shot=(pl.col("cut") >= cut_min).cum_sum(),
         _ok=(pl.col("grass").fill_null(0) >= grass_min)
-        & (pl.col("box_height").fill_null(0) <= box_max if "box_height" in features.columns else pl.lit(True)),
+        & ((pl.col("box_height") <= box_max).fill_null(no_people_ok) if "box_height" in features.columns
+           else pl.lit(True)),
     )
     if shot_vote:
         f = f.with_columns(main=pl.col("_ok").mean().over("shot") >= 0.5)

@@ -11,6 +11,7 @@ from pitchlens.analytics.broadcast_shots import (
     max_leak,
     per_game,
     time_shares,
+    tune_filter_logo,
 )
 
 
@@ -60,6 +61,24 @@ def test_frame_truth_and_filter_report(tmp_path):
     assert s["nonmain_kept"] == pytest.approx(0.5)
     assert s["count_shift"] == pytest.approx((14 + 4 + 12) / 3 - 13)
     assert per_game.height == 1 and set(by_group["cat"]) == {"main camera, live", "close-up"}
+
+
+def test_tune_filter_logo():
+    import polars as pl
+
+    # two games; frames: live main (14 people) and close-ups (1 person); the setting "strict" drops the close-ups
+    rows = []
+    for g in ("a", "b"):
+        rows += [{"game": g, "group": "main camera", "replay": "real-time", "main_live": True, "people": 14.0}] * 8
+        rows += [{"game": g, "group": "close-up", "replay": "real-time", "main_live": False, "people": 1.0}] * 2
+    frames = pl.DataFrame(rows)
+
+    def apply(f, strict):
+        return f.with_columns(main=pl.col("main_live") | pl.lit(not strict))
+
+    grid, logo = tune_filter_logo(frames, [{"strict": False}, {"strict": True}], apply)
+    assert grid.height == 2 and logo["strict"].to_list() == [True, True]
+    assert logo["shift_pp"].to_list() == [0.0, 0.0] and logo["nonmain_kept"].to_list() == [0.0, 0.0]
 
 
 def test_leak_tolerance():

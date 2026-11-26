@@ -530,6 +530,44 @@ def _cmd_cross_league(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2))
 
 
+def _cmd_replay_filter(args: argparse.Namespace) -> None:
+    """Journal step 6: main-camera filter on full broadcasts, tuned leaving one game out."""
+    import itertools
+    import json
+
+    from pitchlens.analytics.broadcast_shots import filter_report, tune_filter_logo
+    from pitchlens.vision.shots import BROADCAST, main_view
+
+    frames = pl.read_parquet(args.frames)
+    if "cut" not in frames.columns:  # notebook 12 saved the shots (cut >= 0.5) instead of the cut scores
+        frames = frames.with_columns(cut=(pl.col("shot").diff().over("game", "half").fill_null(0) > 0)
+                                     .cast(pl.Float64))
+
+    def apply(f, **kw):
+        return pl.concat([main_view(g.drop("shot", "main"), **kw) for _, g in f.group_by("game", "half")])
+
+    settings = [{"grass_min": g, "box_max": b, "shot_vote": v, "no_people_ok": n}
+                for g, b, v, n in itertools.product((0.15, 0.2, 0.3), (200.0, 300.0), (True, False), (True, False))]
+    grid, logo = tune_filter_logo(frames, settings, apply, args.max_live_removed)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    grid.write_csv(out / "grid.csv")
+    logo.write_csv(out / "logo.csv")
+    summary = {}
+    for name, kw in [("b3_default", {}), ("broadcast", BROADCAST)]:
+        bg, pg, s = filter_report(apply(frames, **kw))
+        bg.write_csv(out / f"by_group_{name}.csv")
+        pg.write_csv(out / f"per_game_{name}.csv")
+        summary[name] = s
+    summary["logo"] = {"mean_abs_shift_pp": logo["shift_pp"].abs().mean(), "max_abs_shift_pp":
+                       logo["shift_pp"].abs().max(), "mean_nonmain_kept": logo["nonmain_kept"].mean(),
+                       "mean_main_live_removed": logo["main_live_removed"].mean()}
+    (out / "summary.json").write_text(json.dumps(summary, indent=1))
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=220, fmt_str_lengths=50):
+        print(logo.with_columns(pl.col("game").str.split("/").list.last()))
+        print(json.dumps(summary, indent=1))
+
+
 def _cmd_replay_share(args: argparse.Namespace) -> None:
     """Journal step 5: share of broadcast time that is not the live main camera, and the leak tolerance."""
     import json
@@ -708,6 +746,12 @@ def main(argv: list[str] | None = None) -> None:
     rs.add_argument("--max-pp", type=float, default=1.0, help="Tolerated shift of the corrected value (pp)")
     rs.add_argument("--out", default="outputs/s5_replays")
     rs.set_defaults(func=_cmd_replay_share)
+
+    rf = sub.add_parser("replay-filter", help="Journal step 6: main-camera filter on 8 full broadcasts")
+    rf.add_argument("--frames", default="outputs/s6_replays/s6_frames.parquet", help="Notebook 12 output (private)")
+    rf.add_argument("--max-live-removed", type=float, default=0.05)
+    rf.add_argument("--out", default="outputs/s6_replays/v2")
+    rf.set_defaults(func=_cmd_replay_filter)
 
     tr = sub.add_parser("team-robustness", help="Journal step 1: is the pressing bias driven by one team?")
     tr.add_argument("--table", default="outputs/correction/correction_per_broadcast.csv")
