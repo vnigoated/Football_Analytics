@@ -90,6 +90,51 @@ def per_game(shots: pl.DataFrame) -> pl.DataFrame:
     ).sort("game")
 
 
+def frame_truth(shots: pl.DataFrame, half: int, times_s) -> pl.DataFrame:
+    """Camera label of each frame time (seconds into the half) from one game's shots: ``t, label, group, replay,
+    main_live``. Times outside every labelled shot get nulls."""
+    s = shots.filter(pl.col("half") == half).sort("start_s")
+    t = pl.DataFrame({"t": np.asarray(times_s, float)}).sort("t")
+    j = t.join_asof(s.select("start_s", "duration_s", "label", "group", "replay", "main_live"),
+                    left_on="t", right_on="start_s", strategy="backward")
+    inside = pl.col("t") < pl.col("start_s") + pl.col("duration_s")
+    return j.with_columns([pl.when(inside).then(pl.col(c)).otherwise(None).alias(c)
+                           for c in ("label", "group", "replay", "main_live")]).drop("start_s", "duration_s")
+
+
+def filter_report(frames: pl.DataFrame, slope: float = 4.1) -> tuple[pl.DataFrame, pl.DataFrame, dict[str, float]]:
+    """How well a main-camera filter separates the live main camera from the rest of a broadcast.
+
+    ``frames``: one row per frame with ``game, group, replay, main_live, main`` (True = kept by the filter) and
+    ``people`` (detected people). Returns a table per camera group (share removed), a table per game, and a summary:
+
+    * ``main_live_removed``: live main-camera frames wrongly removed;
+    * ``nonmain_kept``: frames that are not the main camera (live or replay) but were kept: the leak;
+    * ``count_shift``: mean people on kept frames minus on live main-camera frames, and ``shift_pp`` = slope x it,
+      the move of the corrected pressing value.
+    """
+    f = frames.drop_nulls(["group", "main"]).with_columns(
+        cat=pl.when(pl.col("main_live")).then(pl.lit("main camera, live"))
+        .when(pl.col("group") == "main camera").then(pl.lit("main camera, replay"))
+        .otherwise(pl.col("group")))
+    by_group = f.group_by("cat").agg(frames=pl.len(), removed=(~pl.col("main")).mean()).with_columns(
+        share=pl.col("frames") / pl.col("frames").sum()).sort("frames", descending=True)
+
+    def game_stats(g: pl.DataFrame) -> dict[str, float]:
+        live = g.filter(pl.col("main_live"))
+        nonmain = g.filter(pl.col("group") != "main camera")
+        kept = g.filter(pl.col("main"))
+        shift = float(kept["people"].mean() - live["people"].mean()) if kept.height and live.height else float("nan")
+        return {"frames": float(g.height),
+                "main_live_removed": float((~live["main"]).mean()) if live.height else float("nan"),
+                "nonmain_kept": float(nonmain["main"].mean()) if nonmain.height else float("nan"),
+                "nonmain_kept_share_of_kept": float((kept["group"] != "main camera").mean()) if kept.height else 0.0,
+                "count_shift": shift, "shift_pp": slope * shift}
+
+    per_game = pl.DataFrame([{"game": k[0], **game_stats(g)} for k, g in f.group_by("game")]).sort("game")
+    return by_group, per_game, game_stats(f)
+
+
 def leak_shift(nonmain_share: float, leak: float, v_main: float, v_leak: float, slope: float = 4.1) -> float:
     """Shift of the corrected pressing value (pp) when a fraction ``leak`` of the non-main frames is kept."""
     kept_leak = leak * nonmain_share

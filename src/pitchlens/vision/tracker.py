@@ -85,8 +85,9 @@ def detect_sequence(
     threshold: float = 0.05,
     batch: int = 16,
     workers: int = 8,
+    frames: list[tuple[int, Path]] | None = None,
 ) -> pl.DataFrame:
-    """Run an RF-DETR model (``model.predict``) on every frame of a sequence.
+    """Run an RF-DETR model (``model.predict``) on every frame of a sequence (or on ``frames`` if given).
 
     The low threshold keeps weak boxes: ByteTrack uses them in its second association step.
     """
@@ -95,7 +96,7 @@ def detect_sequence(
     def load(p: Path):
         return Image.open(p).convert("RGB")
 
-    frames = sequence_frames(seq_dir)
+    frames = sequence_frames(seq_dir) if frames is None else frames
     rows: list[dict] = []
     with ThreadPoolExecutor(workers) as pool:
         for start in range(0, len(frames), batch):
