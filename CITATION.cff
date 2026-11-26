@@ -6,6 +6,14 @@ authors:
   - family-names: Inamdar
     given-names: Varun
     affiliation: Vishwakarma University, Pune, India
+doi: 10.5281/zenodo.24557591
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24557591
+    description: All versions (resolves to the latest)
+  - type: doi
+    value: 10.5281/zenodo.24557592
+    description: Version 1.0.0 (journal submission)
 version: 1.0.0
 date-released: 2026-11-26
 license: Apache-2.0

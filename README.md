@@ -3,6 +3,7 @@
 [![CI](https://github.com/vnigoated/Football_Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/vnigoated/Football_Analytics/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%E2%80%933.12-blue)
 ![License](https://img.shields.io/badge/license-Apache--2.0-green)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24557591.svg)](https://doi.org/10.5281/zenodo.24557591)
 
 **PitchLens** turns ordinary TV footage of a football match into **tracking data** (where every player and the ball is, in metres). It then computes **pressing intensity** and **Expected Threat (xT)**, each reported **with honest error bars**.
 
@@ -149,6 +150,8 @@ Datasets are **never committed** to this repo; download scripts are provided ins
 ## Citation
 
 If you use PitchLens, please cite it using [CITATION.cff](CITATION.cff) (GitHub: "Cite this repository").
+Archived on Zenodo: all versions [10.5281/zenodo.24557591](https://doi.org/10.5281/zenodo.24557591); the version
+used in the journal manuscript, v1.0.0, is [10.5281/zenodo.24557592](https://doi.org/10.5281/zenodo.24557592).
 
 ## Licence
 
