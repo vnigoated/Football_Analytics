@@ -53,3 +53,14 @@ The steps are also in `README_OVERLEAF.txt` inside the zip.
 - [ ] Zenodo release of the code with a DOI, cited in the data availability statement.
 - [ ] Read the whole text once more against `docs/PAPER_V2_NOTES.md` rows 1–25.
 - [ ] Optional: a co-author with football practice (a club analyst or a supervisor).
+
+## IJPAS version (`ijpas/`)
+
+International Journal of Performance Analysis in Sport: double-anonymous review, unstructured abstract of at most
+200 words, at most 7,500 words including tables, captions and references, declaration of generative AI use,
+format-free (LaTeX: upload the PDFs plus a zip of the sources).
+
+- `ijpas/manuscript.tex`: the text, with `\ifanonymous` switches. Compile `ijpas/anonymous.tex` (review copy, no
+  names, no code link) or `ijpas/authors.tex` (with author details), never `manuscript.tex` itself.
+- `python paper/journal/ijpas/make_ijpas.py` writes the word counts (`ijpas/counts.tex`, printed on the title
+  page) and `paper/journal/ijpas_overleaf.zip`.

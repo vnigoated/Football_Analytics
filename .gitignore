@@ -154,3 +154,6 @@ paper/main.bbl
 
 # signed data agreements (never commit)
 *NDA*.pdf
+
+# unzipped Overleaf bundles (rebuilt by the make scripts)
+paper/journal/*_overleaf/
