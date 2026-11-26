@@ -9,7 +9,7 @@ correction validated on real broadcast video"**
   (`apacite`). `interact.cls` is not in the repo; it comes with Overleaf's template "Taylor & Francis LaTeX template
   for authors (Interact layout + American Psychological Association reference style)". `main_article.tex` is the
   same text in the generic `article` class, as a fallback for other journals.
-- **Abstract:** 247 words, unstructured.
+- **Abstract:** 249 words, unstructured; opens with the design ("In this simulation-based measurement study").
 - The journal's own author-instructions page could not be read automatically (HTTP 403). Third-party summaries
   disagree on the reference style (APA, CSE author–date or Vancouver), so check the official page before submitting.
 
