@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use PitchLens, please cite it as below."
+title: "PitchLens: football analytics from broadcast video"
+type: software
+authors:
+  - family-names: Inamdar
+    given-names: Varun
+    affiliation: Vishwakarma University, Pune, India
+version: 1.0.0
+date-released: 2026-11-26
+license: Apache-2.0
+repository-code: "https://github.com/vnigoated/Football_Analytics"
+abstract: >-
+  Open pipeline from broadcast football video to player positions, roles and teams, and the code for the study of
+  visibility bias in team pressing metrics: a broadcast camera fitted to real footprints, the bias experiments, a
+  correction from the number of visible players, its validation on real video (SoccerNet-GSR, SportsMOT) and a
+  main-camera filter for full broadcasts. Data are not included; they are downloaded from their original sources.
+keywords:
+  - football
+  - soccer
+  - broadcast tracking
+  - pressing
+  - measurement bias
+  - computer vision
+  - sports analytics

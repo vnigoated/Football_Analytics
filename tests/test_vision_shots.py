@@ -3,6 +3,7 @@ import numpy as np
 import polars as pl
 
 from pitchlens.vision.shots import (
+    BROADCAST,
     colour_signature,
     cut_scores,
     frame_features,
@@ -51,6 +52,13 @@ def test_main_view_with_shot_vote():
     assert m["main"].to_list() == [True] * 6 + [False] * 3
     assert m["shot"].to_list() == [0] * 6 + [1] * 3
     assert not main_view(feats, shot_vote=False)["main"][3]
+
+
+def test_main_view_broadcast_drops_frames_without_people():
+    feats = pl.DataFrame({"frame": [1, 2, 3], "grass": [0.8, 0.5, 0.8], "cut": [0.0, 0.9, 0.9],
+                          "box_height": [90.0, None, 250.0]})
+    assert main_view(feats, shot_vote=False)["main"].to_list() == [True, True, True]  # B3: no people passes
+    assert main_view(feats, **BROADCAST)["main"].to_list() == [True, False, False]
 
 
 def test_person_size():

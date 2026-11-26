@@ -4,11 +4,14 @@ import pytest
 
 from pitchlens.analytics.broadcast_shots import (
     complete_games,
+    filter_report,
+    frame_truth,
     leak_shift,
     load_all,
     max_leak,
     per_game,
     time_shares,
+    tune_filter_logo,
 )
 
 
@@ -40,6 +43,42 @@ def test_shares_and_completeness(tmp_path):
     assert s["share"].sum() == pytest.approx(1.0)
     assert complete_games(shots, min_changes=3, max_gap_s=1000) == ["lg/2015/g1"]
     assert complete_games(shots, min_changes=3, max_gap_s=100) == []
+
+
+def test_frame_truth_and_filter_report(tmp_path):
+    write_game(tmp_path, "g1", [ann(1, 0, "Public"), ann(1, 10, "Main camera center"),
+                                ann(1, 14, "Close-up player or field referee"), ann(1, 20, "Main camera center")])
+    shots = load_all(tmp_path)
+    # shots: 0-10 main, 10-14 close-up, 14-20 main (each label = the shot ending at it)
+    t = frame_truth(shots, 1, [5.0, 12.0, 13.0, 19.5, 25.0])
+    assert t["group"].to_list() == ["main camera", "close-up", "close-up", "main camera", None]
+    import polars as pl
+
+    frames = t.with_columns(game=pl.lit("g1"), main=pl.Series([True, False, True, True, True]),
+                            people=pl.Series([14.0, 2.0, 4.0, 12.0, 0.0]))
+    by_group, per_game, s = filter_report(frames)
+    assert s["main_live_removed"] == 0.0
+    assert s["nonmain_kept"] == pytest.approx(0.5)
+    assert s["count_shift"] == pytest.approx((14 + 4 + 12) / 3 - 13)
+    assert per_game.height == 1 and set(by_group["cat"]) == {"main camera, live", "close-up"}
+
+
+def test_tune_filter_logo():
+    import polars as pl
+
+    # two games; frames: live main (14 people) and close-ups (1 person); the setting "strict" drops the close-ups
+    rows = []
+    for g in ("a", "b"):
+        rows += [{"game": g, "group": "main camera", "replay": "real-time", "main_live": True, "people": 14.0}] * 8
+        rows += [{"game": g, "group": "close-up", "replay": "real-time", "main_live": False, "people": 1.0}] * 2
+    frames = pl.DataFrame(rows)
+
+    def apply(f, strict):
+        return f.with_columns(main=pl.col("main_live") | pl.lit(not strict))
+
+    grid, logo = tune_filter_logo(frames, [{"strict": False}, {"strict": True}], apply)
+    assert grid.height == 2 and logo["strict"].to_list() == [True, True]
+    assert logo["shift_pp"].to_list() == [0.0, 0.0] and logo["nonmain_kept"].to_list() == [0.0, 0.0]
 
 
 def test_leak_tolerance():
